@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildExportArtifactScript } from "./export";
+import { buildExportArtifactScript, isExecutionTimeoutError } from "./export";
 
 describe("buildExportArtifactScript", () => {
   it("builds svg export script", () => {
@@ -21,5 +21,11 @@ describe("buildExportArtifactScript", () => {
     expect(script).toContain('var format = "png";');
     expect(script).toContain("ExportOptionsPNG24");
     expect(script).toContain('"scalePercent":200');
+  });
+
+  it("detects timeout error shape", () => {
+    expect(isExecutionTimeoutError({ code: "ETIMEDOUT" })).toBe(true);
+    expect(isExecutionTimeoutError({ code: "ENOENT" })).toBe(false);
+    expect(isExecutionTimeoutError(null)).toBe(false);
   });
 });

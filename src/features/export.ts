@@ -1,4 +1,5 @@
 import z from "zod";
+import fs from "fs";
 
 import { executeExtendScript } from "../extend-utils/utils";
 import { server } from "../server";
@@ -64,6 +65,12 @@ JSON.stringify({
 });
 `;
 
+export const isExecutionTimeoutError = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  (error as { code?: unknown }).code === "ETIMEDOUT";
+
 server.tool(
   "export_artifact",
   "Export the document to SVG, PDF, or PNG.",
@@ -73,9 +80,30 @@ server.tool(
     options: exportOptionsSchema.describe("Optional export settings"),
   },
   async ({ path, format, options }) => {
-    const output = executeExtendScript(
-      buildExportArtifactScript(path, format, options)
-    );
+    let output = "";
+    try {
+      output = executeExtendScript(buildExportArtifactScript(path, format, options));
+    } catch (error) {
+      if (isExecutionTimeoutError(error) && fs.existsSync(path)) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Export completed, but Illustrator response timed out.\n\n${JSON.stringify(
+                {
+                  path,
+                  format,
+                  warning:
+                    "osascript response timed out after export. File existence was verified.",
+                }
+              )}`,
+            },
+          ],
+        };
+      }
+      throw error;
+    }
+
     return {
       content: [{ type: "text", text: `Exported successfully.\n\n${output}` }],
     };

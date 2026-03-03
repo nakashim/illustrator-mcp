@@ -5,6 +5,8 @@ import path from "path";
 
 import { jsonDefinition } from "./json";
 
+const DEFAULT_OSASCRIPT_TIMEOUT_MS = 120_000;
+
 export const executeExtendScript = (script: string) => {
   // 一時フォルダ生成
   const dir = `${os.homedir()}/illustrator-mcp-tmp`;
@@ -42,7 +44,7 @@ return resultText`;
   try {
     // 実行
     const output = execFileSync("osascript", [appleScriptPath], {
-      timeout: 30_000,
+      timeout: DEFAULT_OSASCRIPT_TIMEOUT_MS,
     });
     return output.toString();
   } finally {
