@@ -13,18 +13,70 @@ type ExecuteExtendScriptOptions = {
   retries?: number;
 };
 
-export const shouldRetryExecutionError = (error: unknown) => {
-  const message =
-    typeof error === "object" && error !== null && "message" in error
-      ? String((error as { message?: unknown }).message)
-      : "";
+export type ExecutionErrorKind =
+  | "timeout"
+  | "connection_invalid"
+  | "no_such_object"
+  | "permission_denied"
+  | "script_syntax_error"
+  | "unknown";
 
-  return (
-    message.includes("Connection invalid") ||
-    message.includes("kAENoSuchObject") ||
-    message.includes("(-609)")
-  );
+type ExecutionErrorInfo = {
+  kind: ExecutionErrorKind;
+  message: string;
 };
+
+const getErrorMessage = (error: unknown) => {
+  if (typeof error === "string") {
+    return error;
+  }
+  if (typeof error !== "object" || error === null) {
+    return "";
+  }
+
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  const stderr =
+    "stderr" in error && (error as { stderr?: unknown }).stderr
+      ? String((error as { stderr?: unknown }).stderr)
+      : "";
+  return `${message}\n${stderr}`.trim();
+};
+
+export const classifyExecutionError = (error: unknown): ExecutionErrorInfo => {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  const message = getErrorMessage(error);
+
+  if (code === "ETIMEDOUT" || message.includes("ETIMEDOUT")) {
+    return { kind: "timeout", message };
+  }
+  if (message.includes("Connection invalid") || message.includes("(-609)")) {
+    return { kind: "connection_invalid", message };
+  }
+  if (message.includes("kAENoSuchObject")) {
+    return { kind: "no_such_object", message };
+  }
+  if (
+    message.includes("Not authorized to send Apple events") ||
+    message.includes("Operation not permitted")
+  ) {
+    return { kind: "permission_denied", message };
+  }
+  if (message.includes("Expected end of line but found identifier")) {
+    return { kind: "script_syntax_error", message };
+  }
+  return { kind: "unknown", message };
+};
+
+export const shouldRetryExecutionError = (error: unknown) => {
+  const info = classifyExecutionError(error);
+  return info.kind === "connection_invalid" || info.kind === "no_such_object";
+};
+
+export const toExtendScriptStringLiteral = (value: string) =>
+  JSON.stringify(value);
 
 export const executeExtendScript = (
   script: string,
@@ -57,8 +109,11 @@ ${script}`;
   fs.writeFileSync(extendScriptPath, combinedScript);
 
   // AppleScript 生成
+  const appleScriptPathLiteral = extendScriptPath
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"');
   const appleScript = `tell application "Adobe Illustrator"
-    set resultText to do javascript of file "${extendScriptPath}"
+    set resultText to do javascript of file "${appleScriptPathLiteral}"
 end tell
 return resultText`;
   const appleScriptPath = path.join(dir, `message-${requestId}.scpt`);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { computeScaleFactor, formatPt, parseLengthToPt } from "./image";
+import { formatPt, parseLengthToPt } from "../core/halftone";
+import { computeScaleFactor } from "./image";
 
 describe("image inspect helpers", () => {
   it("parses length units into pt", () => {

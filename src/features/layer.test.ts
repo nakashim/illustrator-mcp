@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildLayerManageScript } from "./layer";
+import { buildLayerManageScript } from "../adapters/illustrator";
 
 describe("buildLayerManageScript", () => {
   it("builds list action script", () => {

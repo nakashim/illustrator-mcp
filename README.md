@@ -48,7 +48,9 @@ Prerequisites for `test:smoke`:
 - `health_check` (runtime + capabilities)
 - `create_document`
 - `layer_manage` (`create` / `list`)
-- `create_rects`
+- `create_rects` / `create_lines` / `list_pathitems`
+- `select_items` / `remove_items`
+- `create_textframes` / `list_textframes` / `list_fonts`
 - `export_artifact` (SVG and SVGZ)
 
 The smoke script writes:
@@ -79,13 +81,42 @@ If `yarn test:smoke` fails, run this checklist in your MCP client and confirm ea
 
 ## Export Behavior Notes
 
-- Export logic is centralized in `src/features/export.ts`.
+- Export logic is centralized in `src/adapters/illustrator/export.ts`.
 - Timeout/file-existence fallback is preserved:
   - if Illustrator response times out but artifact exists, the tool returns a warning and treats export as completed.
 - For SVG with `compressed: true`, output path is normalized to `.svgz`.
+- `export_selection` is available for UUID-based selection export via a temporary document.
 - Runtime diagnostics and update profile are available via:
   - `health_check`
   - `get_capabilities`
+
+## Practical Presets (Production)
+
+Use these defaults as a starting point for day-to-day operation:
+
+- **A: Fast / Stable**
+  - `halftone_vector`: moderate density and lower processing load
+  - `export_selection`: `format=svg`, `precision=4`, `compressed=false`
+  - recommended for iterative prompt testing and frequent reruns
+
+- **B: Quality / Final**
+  - `halftone_vector`: higher detail settings (larger `maxDots` and tuned tone params)
+  - `export_selection`: `format=svg`, `precision=4`, `compressed=true` (outputs `.svgz`)
+  - recommended for final artifact delivery
+
+Operational guidance:
+
+- Prefer exporting by **group UUID** (`export_selection`) instead of broad mixed selections.
+- For heavy documents, run one major effect/export at a time.
+- On transient AppleEvent failures (`Connection invalid`), retry once.
+- If retry fails, restart Illustrator and run the same command again.
+
+## Runtime Safety Notes
+
+- ExtendScript execution errors are categorized in `src/extend-utils/utils.ts` (`classifyExecutionError`):
+  - timeout / transient connection / missing object / permission / script syntax
+- Retry behavior only applies to transient AppleEvent categories.
+- String interpolation safety for script arguments uses `toExtendScriptStringLiteral`.
 
 ## Halftone Vector (MVP)
 

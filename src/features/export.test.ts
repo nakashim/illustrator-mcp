@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildExportArtifactScript,
-  isExecutionTimeoutError,
+  buildExportSelectionScript,
   normalizeExportPath,
-} from "./export";
+  isExecutionTimeoutError,
+} from "../adapters/illustrator";
 
 describe("buildExportArtifactScript", () => {
   it("builds svg export script", () => {
@@ -25,6 +26,19 @@ describe("buildExportArtifactScript", () => {
     expect(script).toContain('var format = "png";');
     expect(script).toContain("ExportOptionsPNG24");
     expect(script).toContain('"scalePercent":200');
+  });
+
+  it("builds selection export script with temporary document flow", () => {
+    const script = buildExportSelectionScript(
+      ["u1", "u2"],
+      "/tmp/selection.svg",
+      "svg",
+      { compressed: false, precision: 4 }
+    );
+    expect(script).toContain('var uuids = ["u1","u2"]');
+    expect(script).toContain("exportDoc = app.documents.add()");
+    expect(script).toContain("exportDoc.close(SaveOptions.DONOTSAVECHANGES)");
+    expect(script).toContain("selectionCount");
   });
 
   it("detects timeout error shape", () => {

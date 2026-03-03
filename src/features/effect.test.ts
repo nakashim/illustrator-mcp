@@ -5,7 +5,7 @@ import {
   generateHalftoneDots,
   parseLengthToPt,
   suggestHalftoneParams,
-} from "./effect";
+} from "../core/halftone";
 
 describe("halftone helpers", () => {
   it("parses mm and Q lengths to points", () => {

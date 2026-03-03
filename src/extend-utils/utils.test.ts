@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldRetryExecutionError } from "./utils";
+import {
+  classifyExecutionError,
+  shouldRetryExecutionError,
+  toExtendScriptStringLiteral,
+} from "./utils";
 
 describe("shouldRetryExecutionError", () => {
   it("returns true for transient AppleEvent connection issues", () => {
@@ -17,5 +21,27 @@ describe("shouldRetryExecutionError", () => {
         message: "spawnSync osascript ETIMEDOUT",
       })
     ).toBe(false);
+  });
+});
+
+describe("classifyExecutionError", () => {
+  it("classifies timeout errors", () => {
+    expect(
+      classifyExecutionError({ message: "spawnSync osascript ETIMEDOUT" }).kind
+    ).toBe("timeout");
+  });
+
+  it("classifies permission errors", () => {
+    expect(
+      classifyExecutionError({
+        message: "Not authorized to send Apple events to Adobe Illustrator",
+      }).kind
+    ).toBe("permission_denied");
+  });
+});
+
+describe("toExtendScriptStringLiteral", () => {
+  it("returns JSON-escaped string literal", () => {
+    expect(toExtendScriptStringLiteral('a"b')).toBe('"a\\"b"');
   });
 });

@@ -34,6 +34,21 @@ const cleanup = () => {
 };
 
 const readText = (result) => result.content?.[0]?.text ?? "";
+const readPayload = (text) => {
+  const idx = text.indexOf("\n\n");
+  if (idx < 0) {
+    return null;
+  }
+  const body = text.slice(idx + 2).trim();
+  if (!body) {
+    return null;
+  }
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+};
 
 const callTool = async (client, name, args) => {
   const result = await client.callTool({ name, arguments: args });
@@ -89,9 +104,43 @@ const main = async () => {
   assertIncludes(layerListText, "SmokeLayer", "layer_manage(list)");
 
   const rectText = await callTool(client, "create_rects", {
-    rects: [{ position: ["10mm", "10mm"], size: ["30mm", "20mm"] }],
+    rects: [
+      { position: ["10mm", "10mm"], size: ["30mm", "20mm"] },
+      { position: ["50mm", "10mm"], size: ["20mm", "20mm"] },
+    ],
   });
   assertIncludes(rectText, "Created successfully.", "create_rects");
+  const rectPayload = readPayload(rectText);
+  if (!Array.isArray(rectPayload) || rectPayload.length < 2) {
+    throw new Error("create_rects did not return expected UUID payload");
+  }
+
+  const lineText = await callTool(client, "create_lines", {
+    lines: [{ points: { from: ["10mm", "40mm"], to: ["90mm", "40mm"] } }],
+  });
+  assertIncludes(lineText, "Successfully created.", "create_lines");
+
+  const pathListText = await callTool(client, "list_pathitems", {});
+  assertIncludes(pathListText, "Retrieved successfully.", "list_pathitems");
+
+  const selectText = await callTool(client, "select_items", {
+    uuids: [rectPayload[0].uuid],
+  });
+  assertIncludes(selectText, "Objects selected.", "select_items");
+
+  const removeText = await callTool(client, "remove_items", {
+    uuids: [rectPayload[1].uuid],
+  });
+  assertIncludes(removeText, "Objects removed.", "remove_items");
+
+  const textFrameText = await callTool(client, "create_textframes", { count: 1 });
+  assertIncludes(textFrameText, "Placed successfully.", "create_textframes");
+
+  const textListText = await callTool(client, "list_textframes", {});
+  assertIncludes(textListText, "Retrieved successfully.", "list_textframes");
+
+  const fontsText = await callTool(client, "list_fonts", {});
+  assertIncludes(fontsText, "Retrieved successfully.", "list_fonts");
 
   const svgText = await callTool(client, "export_artifact", {
     path: svgPath,
