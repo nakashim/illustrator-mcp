@@ -9,9 +9,10 @@ const DEFAULT_OSASCRIPT_TIMEOUT_MS = 120_000;
 
 export const executeExtendScript = (script: string) => {
   // 一時フォルダ生成
-  const dir = `${os.homedir()}/illustrator-mcp-tmp`;
+  const dir =
+    process.env.ILLUSTRATOR_MCP_TMP_DIR ?? `${os.homedir()}/illustrator-mcp-tmp`;
   if (!fs.existsSync(dir)) {
-    mkdirSync(dir);
+    mkdirSync(dir, { recursive: true });
   }
 
   const scriptDefinitions = [
