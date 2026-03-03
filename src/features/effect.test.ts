@@ -4,6 +4,7 @@ import {
   applyToneAdjustments,
   generateHalftoneDots,
   parseLengthToPt,
+  suggestHalftoneParams,
 } from "./effect";
 
 describe("halftone helpers", () => {
@@ -94,5 +95,20 @@ describe("halftone helpers", () => {
       () => ({ luma: 1, alpha: 0 })
     );
     expect(dots.length).toBe(0);
+  });
+
+  it("suggests three halftone profiles with recommended limits", () => {
+    const suggestions = suggestHalftoneParams({
+      scaleFactor: 2,
+      placedWidthPt: 2000,
+      placedHeightPt: 2000,
+      baseDotSpacingPt: 5,
+      baseMinDotSizePt: 0.35,
+      baseMaxDotSizePt: 4.6,
+    });
+    expect(suggestions.light.maxDots).toBe(30000);
+    expect(suggestions.standard.maxDots).toBe(60000);
+    expect(suggestions.quality.maxDots).toBe(100000);
+    expect(suggestions.standard.dotSpacing.endsWith("pt")).toBe(true);
   });
 });

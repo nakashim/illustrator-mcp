@@ -103,6 +103,16 @@ Important notes:
   - `dotScale` (`0` to `3`)
   - `backgroundThreshold` (`0` to `1`, default `0.06`)
 
+## Halftone Suggestions
+
+- Tool: `suggest_halftone_params`
+- Purpose: Provide ready-to-run `halftone_vector` arguments from image/placement size.
+- Profiles:
+  - `light`: lower load (`maxDots` 30000)
+  - `standard`: balanced (`maxDots` 60000)
+  - `quality`: higher detail (`maxDots` 100000)
+- This tool is advisory; manual overrides stay fully supported.
+
 ## Image Inspection
 
 - Tool: `inspect_image`

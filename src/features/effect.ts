@@ -37,6 +37,17 @@ type PlacedItemInfo = {
   bounds: Bounds;
 };
 
+type HalftoneProfile = "light" | "standard" | "quality";
+
+type HalftoneSuggestionInput = {
+  targetUuid: string;
+  baselinePx?: number;
+  profile?: HalftoneProfile;
+  baseDotSpacing?: string;
+  baseMinDotSize?: string;
+  baseMaxDotSize?: string;
+};
+
 export const parseLengthToPt = (value: string): number => {
   const input = value.trim();
   if (input.endsWith("mm")) {
@@ -58,6 +69,66 @@ const hash32 = (value: number) => {
   x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
   x = x ^ (x >>> 16);
   return x >>> 0;
+};
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+const formatPt = (value: number) => `${value.toFixed(3)}pt`;
+
+export const suggestHalftoneParams = (params: {
+  scaleFactor: number;
+  placedWidthPt: number;
+  placedHeightPt: number;
+  baseDotSpacingPt: number;
+  baseMinDotSizePt: number;
+  baseMaxDotSizePt: number;
+}) => {
+  const { scaleFactor, placedWidthPt, placedHeightPt } = params;
+
+  const buildProfile = (
+    profile: HalftoneProfile,
+    spacingMul: number,
+    minMul: number,
+    maxMul: number,
+    maxDots: number
+  ) => {
+    const spacingPt = clamp(
+      params.baseDotSpacingPt * scaleFactor * spacingMul,
+      2.5,
+      14
+    );
+    const minPt = clamp(params.baseMinDotSizePt * scaleFactor * minMul, 0.15, 2.5);
+    const maxPt = clamp(params.baseMaxDotSizePt * scaleFactor * maxMul, 1.2, 12);
+    const estimatedGridCount =
+      Math.max(1, Math.floor(placedWidthPt / spacingPt)) *
+      Math.max(1, Math.floor(placedHeightPt / spacingPt));
+
+    return {
+      profile,
+      dotSpacing: formatPt(spacingPt),
+      minDotSize: formatPt(minPt),
+      maxDotSize: formatPt(maxPt),
+      maxDots,
+      estimatedGridCount,
+      mayHitMaxDots: estimatedGridCount > maxDots,
+      defaults: {
+        angleDeg: 0,
+        contrast: 14,
+        gamma: 1.1,
+        dotScale: 1.15,
+        backgroundThreshold: 0.04,
+        invert: false,
+        colorCmyk: [0, 0, 0, 100],
+      },
+    };
+  };
+
+  return {
+    light: buildProfile("light", 1.25, 1.0, 0.85, 30000),
+    standard: buildProfile("standard", 1.0, 1.0, 1.0, 60000),
+    quality: buildProfile("quality", 0.85, 1.05, 1.1, 100000),
+  };
 };
 
 type ToneOptions = Pick<HalftoneOptions, "contrast" | "gamma" | "dotScale" | "invert">;
@@ -199,6 +270,32 @@ JSON.stringify({
 });
 `;
 
+const suggestHalftoneSchema = {
+  targetUuid: z.string().describe("UUID of a placed image item"),
+  baselinePx: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Baseline long-edge size in px for scaling recommendations (default: 1200)"),
+  profile: z
+    .enum(["light", "standard", "quality"])
+    .optional()
+    .describe("Recommended profile to use as primary output"),
+  baseDotSpacing: z
+    .string()
+    .optional()
+    .describe("Base dot spacing to scale (default: 5pt)"),
+  baseMinDotSize: z
+    .string()
+    .optional()
+    .describe("Base min dot size to scale (default: 0.35pt)"),
+  baseMaxDotSize: z
+    .string()
+    .optional()
+    .describe("Base max dot size to scale (default: 4.6pt)"),
+};
+
 const buildDrawHalftoneScript = (
   dots: Dot[],
   cmyk: [number, number, number, number],
@@ -281,6 +378,78 @@ const halftoneSchema = {
     .describe("Dot color as CMYK percentages"),
   groupName: z.string().optional().describe("Output group name"),
 };
+
+server.tool(
+  "suggest_halftone_params",
+  "Suggest halftone_vector parameters based on image size and placement.",
+  suggestHalftoneSchema,
+  async ({
+    targetUuid,
+    baselinePx,
+    profile,
+    baseDotSpacing,
+    baseMinDotSize,
+    baseMaxDotSize,
+  }: HalftoneSuggestionInput) => {
+    const itemInfoText = executeExtendScript(buildPlacedItemInfoScript(targetUuid));
+    const item = JSON.parse(itemInfoText) as PlacedItemInfo;
+    if (!item.filePath) {
+      throw new Error("Target item has no linked file path.");
+    }
+
+    const image = await Jimp.read(item.filePath);
+    const widthPx = image.bitmap.width;
+    const heightPx = image.bitmap.height;
+    const baseline = baselinePx ?? 1200;
+    const scaleFactor = Math.max(widthPx, heightPx) / baseline;
+
+    const suggestions = suggestHalftoneParams({
+      scaleFactor,
+      placedWidthPt: item.bounds.right - item.bounds.left,
+      placedHeightPt: item.bounds.top - item.bounds.bottom,
+      baseDotSpacingPt: parseLengthToPt(baseDotSpacing ?? "5pt"),
+      baseMinDotSizePt: parseLengthToPt(baseMinDotSize ?? "0.35pt"),
+      baseMaxDotSizePt: parseLengthToPt(baseMaxDotSize ?? "4.6pt"),
+    });
+
+    const selectedProfile = profile ?? "standard";
+    const selected = suggestions[selectedProfile];
+    const recommendedArgs = {
+      targetUuid,
+      dotSpacing: selected.dotSpacing,
+      minDotSize: selected.minDotSize,
+      maxDotSize: selected.maxDotSize,
+      angleDeg: selected.defaults.angleDeg,
+      contrast: selected.defaults.contrast,
+      gamma: selected.defaults.gamma,
+      dotScale: selected.defaults.dotScale,
+      backgroundThreshold: selected.defaults.backgroundThreshold,
+      maxDots: selected.maxDots,
+      invert: selected.defaults.invert,
+      colorCmyk: selected.defaults.colorCmyk,
+      groupName: `Halftone_${selectedProfile}`,
+    };
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Suggested successfully.\n\n${JSON.stringify({
+            targetUuid,
+            pixelSize: { width: widthPx, height: heightPx, longEdge: Math.max(widthPx, heightPx) },
+            baselinePx: baseline,
+            scaleFactor,
+            selectedProfile,
+            recommendedArgs,
+            profiles: suggestions,
+            note:
+              "Suggestions are advisory. You can override any parameter before running halftone_vector.",
+          })}`,
+        },
+      ],
+    };
+  }
+);
 
 server.tool(
   "halftone_vector",
