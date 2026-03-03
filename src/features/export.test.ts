@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildExportArtifactScript, isExecutionTimeoutError } from "./export";
+import {
+  buildExportArtifactScript,
+  isExecutionTimeoutError,
+  normalizeExportPath,
+} from "./export";
 
 describe("buildExportArtifactScript", () => {
   it("builds svg export script", () => {
@@ -27,5 +31,23 @@ describe("buildExportArtifactScript", () => {
     expect(isExecutionTimeoutError({ code: "ETIMEDOUT" })).toBe(true);
     expect(isExecutionTimeoutError({ code: "ENOENT" })).toBe(false);
     expect(isExecutionTimeoutError(null)).toBe(false);
+  });
+
+  it("normalizes svg path to svgz when compressed is true", () => {
+    expect(
+      normalizeExportPath("/tmp/out.svg", "svg", { compressed: true })
+    ).toBe("/tmp/out.svgz");
+    expect(
+      normalizeExportPath("/tmp/out", "svg", { compressed: true })
+    ).toBe("/tmp/out.svgz");
+  });
+
+  it("keeps requested path when not compressed or non-svg", () => {
+    expect(
+      normalizeExportPath("/tmp/out.svg", "svg", { compressed: false })
+    ).toBe("/tmp/out.svg");
+    expect(
+      normalizeExportPath("/tmp/out.pdf", "pdf", { compressed: true })
+    ).toBe("/tmp/out.pdf");
   });
 });
