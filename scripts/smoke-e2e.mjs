@@ -60,6 +60,12 @@ const main = async () => {
 
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
 
+  const healthText = await callTool(client, "health_check", {
+    includeCapabilities: true,
+  });
+  assertIncludes(healthText, "appVersion", "health_check");
+  assertIncludes(healthText, "capabilities", "health_check");
+
   const docText = await callTool(client, "create_document", {
     width: "120mm",
     height: "120mm",

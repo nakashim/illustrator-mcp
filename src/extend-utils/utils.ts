@@ -6,8 +6,30 @@ import path from "path";
 import { jsonDefinition } from "./json";
 
 const DEFAULT_OSASCRIPT_TIMEOUT_MS = 120_000;
+const DEFAULT_RETRY_COUNT = 1;
 
-export const executeExtendScript = (script: string) => {
+type ExecuteExtendScriptOptions = {
+  timeoutMs?: number;
+  retries?: number;
+};
+
+export const shouldRetryExecutionError = (error: unknown) => {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message)
+      : "";
+
+  return (
+    message.includes("Connection invalid") ||
+    message.includes("kAENoSuchObject") ||
+    message.includes("(-609)")
+  );
+};
+
+export const executeExtendScript = (
+  script: string,
+  options?: ExecuteExtendScriptOptions
+) => {
   // 一時フォルダ生成
   const dir =
     process.env.ILLUSTRATOR_MCP_TMP_DIR ?? `${os.homedir()}/illustrator-mcp-tmp`;
@@ -42,12 +64,26 @@ return resultText`;
   const appleScriptPath = path.join(dir, `message-${requestId}.scpt`);
   fs.writeFileSync(appleScriptPath, appleScript);
 
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_OSASCRIPT_TIMEOUT_MS;
+  const retries = options?.retries ?? DEFAULT_RETRY_COUNT;
+
   try {
-    // 実行
-    const output = execFileSync("osascript", [appleScriptPath], {
-      timeout: DEFAULT_OSASCRIPT_TIMEOUT_MS,
-    });
-    return output.toString();
+    let attempt = 0;
+    while (true) {
+      try {
+        // 実行
+        const output = execFileSync("osascript", [appleScriptPath], {
+          timeout: timeoutMs,
+        });
+        return output.toString();
+      } catch (error) {
+        const canRetry = attempt < retries && shouldRetryExecutionError(error);
+        if (!canRetry) {
+          throw error;
+        }
+        attempt += 1;
+      }
+    }
   } finally {
     cleanupTempFile(extendScriptPath);
     cleanupTempFile(appleScriptPath);

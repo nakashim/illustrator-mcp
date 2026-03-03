@@ -45,6 +45,7 @@ Prerequisites for `test:smoke`:
 
 `test:smoke` validates these runtime operations in order:
 
+- `health_check` (runtime + capabilities)
 - `create_document`
 - `layer_manage` (`create` / `list`)
 - `create_rects`
@@ -69,11 +70,12 @@ Temporary script directory can also be overridden:
 If `yarn test:smoke` fails, run this checklist in your MCP client and confirm each response:
 
 1. `create_document` -> should include `Document created.`
-2. `layer_manage` with `create` -> should include your layer name
-3. `layer_manage` with `list` -> should include the created layer
-4. `create_rects` -> should include `Created successfully.`
-5. `export_artifact` (`compressed: false`) -> `.svg` file exists
-6. `export_artifact` (`compressed: true`) -> `.svgz` file exists
+2. `health_check` -> should include `appVersion`
+3. `layer_manage` with `create` -> should include your layer name
+4. `layer_manage` with `list` -> should include the created layer
+5. `create_rects` -> should include `Created successfully.`
+6. `export_artifact` (`compressed: false`) -> `.svg` file exists
+7. `export_artifact` (`compressed: true`) -> `.svgz` file exists
 
 ## Export Behavior Notes
 
@@ -81,3 +83,6 @@ If `yarn test:smoke` fails, run this checklist in your MCP client and confirm ea
 - Timeout/file-existence fallback is preserved:
   - if Illustrator response times out but artifact exists, the tool returns a warning and treats export as completed.
 - For SVG with `compressed: true`, output path is normalized to `.svgz`.
+- Runtime diagnostics and update profile are available via:
+  - `health_check`
+  - `get_capabilities`
