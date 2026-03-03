@@ -2,6 +2,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { server } from "./server";
 
 import "./features/document";
+import "./features/effect";
 import "./features/export";
 import "./features/image";
 import "./features/item";

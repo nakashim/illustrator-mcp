@@ -86,3 +86,14 @@ If `yarn test:smoke` fails, run this checklist in your MCP client and confirm ea
 - Runtime diagnostics and update profile are available via:
   - `health_check`
   - `get_capabilities`
+
+## Halftone Vector (MVP)
+
+- Tool: `halftone_vector`
+- Input: UUID of a linked placed image item (`targetUuid`)
+- Output: A grouped set of vector dots (`groupUuid`, `dotCount`)
+
+Important notes:
+
+- This MVP currently targets linked image files (not embedded-only raster items).
+- Use conservative settings first (`dotSpacing` around `2mm`, `maxDots` around `2500`) to avoid heavy artwork.
