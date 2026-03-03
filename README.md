@@ -102,3 +102,12 @@ Important notes:
   - `gamma` (`0.1` to `5`)
   - `dotScale` (`0` to `3`)
   - `backgroundThreshold` (`0` to `1`, default `0.06`)
+
+## Image Inspection
+
+- Tool: `inspect_image`
+- Purpose: Read placed-image pixel size and return scaling recommendations before running heavy effects.
+- Baseline strategy:
+  - default baseline: `1200px` (long edge)
+  - returns `scaleFactor` and suggested `dotSpacing` / `minDotSize` / `maxDotSize`
+- This is advisory only; manual parameter overrides remain fully supported.

@@ -1,7 +1,69 @@
 import z from "zod";
+import { Jimp } from "jimp";
 
 import { server } from "../server";
 import { executeExtendScript } from "../extend-utils/utils";
+
+type InspectImageInput = {
+  targetUuid: string;
+  baselinePx?: number;
+  baseDotSpacing?: string;
+  baseMinDotSize?: string;
+  baseMaxDotSize?: string;
+};
+
+export const parseLengthToPt = (value: string): number => {
+  const input = value.trim();
+  if (input.endsWith("mm")) {
+    return (parseFloat(input.slice(0, -2)) * 72) / 25.4;
+  }
+  if (input.endsWith("Q")) {
+    return (parseFloat(input.slice(0, -1)) / 4 / 25.4) * 72;
+  }
+  if (input.endsWith("pt")) {
+    return parseFloat(input.slice(0, -2));
+  }
+  return parseFloat(input);
+};
+
+export const formatPt = (value: number) => `${value.toFixed(3)}pt`;
+
+export const computeScaleFactor = (pixelWidth: number, pixelHeight: number, baselinePx: number) => {
+  const longEdge = Math.max(pixelWidth, pixelHeight);
+  if (baselinePx <= 0) {
+    return 1;
+  }
+  return longEdge / baselinePx;
+};
+
+const buildInspectImageScript = (uuid: string) => `
+var item = getPageItem("${uuid}");
+if (!item) {
+  throw new Error("Target item not found: ${uuid}");
+}
+var bounds = item.geometricBounds;
+var filePath = "";
+try {
+  if (item.file) {
+    filePath = item.file.fsName || item.file.fullName || item.file.absoluteURI || item.file.toString();
+  }
+} catch (e) {
+  filePath = "";
+}
+JSON.stringify({
+  uuid: item.note,
+  typename: item.typename,
+  filePath: filePath,
+  widthPt: item.width,
+  heightPt: item.height,
+  bounds: {
+    left: bounds[0],
+    top: bounds[1],
+    right: bounds[2],
+    bottom: bounds[3]
+  }
+});
+`;
 
 server.tool(
   "create_images",
@@ -60,6 +122,102 @@ JSON.stringify(result);
     const output = executeExtendScript(script);
     return {
       content: [{ type: "text", text: `Retrieved successfully.\n\n${output}` }],
+    };
+  }
+);
+
+server.tool(
+  "inspect_image",
+  "Inspect an image and return size + suggested halftone scaling.",
+  {
+    targetUuid: z.string().describe("UUID of a placed image item"),
+    baselinePx: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Baseline long-edge size in px for scaling recommendations (default: 1200)"),
+    baseDotSpacing: z
+      .string()
+      .optional()
+      .describe("Base dot spacing to scale (default: 5pt)"),
+    baseMinDotSize: z
+      .string()
+      .optional()
+      .describe("Base min dot size to scale (default: 0.35pt)"),
+    baseMaxDotSize: z
+      .string()
+      .optional()
+      .describe("Base max dot size to scale (default: 4.6pt)"),
+  },
+  async ({
+    targetUuid,
+    baselinePx,
+    baseDotSpacing,
+    baseMinDotSize,
+    baseMaxDotSize,
+  }: InspectImageInput) => {
+    const infoText = executeExtendScript(buildInspectImageScript(targetUuid));
+    const info = JSON.parse(infoText) as {
+      uuid: string;
+      typename: string;
+      filePath: string;
+      widthPt: number;
+      heightPt: number;
+      bounds: { left: number; top: number; right: number; bottom: number };
+    };
+
+    if (!info.filePath) {
+      throw new Error("Target item has no linked file path.");
+    }
+
+    const image = await Jimp.read(info.filePath);
+    const widthPx = image.bitmap.width;
+    const heightPx = image.bitmap.height;
+    const baseline = baselinePx ?? 1200;
+    const scaleFactor = computeScaleFactor(widthPx, heightPx, baseline);
+
+    const baseSpacingPt = parseLengthToPt(baseDotSpacing ?? "5pt");
+    const baseMinPt = parseLengthToPt(baseMinDotSize ?? "0.35pt");
+    const baseMaxPt = parseLengthToPt(baseMaxDotSize ?? "4.6pt");
+
+    const suggestedSpacingPt = baseSpacingPt * scaleFactor;
+    const suggestedMinPt = baseMinPt * scaleFactor;
+    const suggestedMaxPt = baseMaxPt * scaleFactor;
+
+    // Approximate dot count before threshold/drop, useful for safety planning.
+    const estimatedGridCount =
+      Math.max(1, Math.floor(info.widthPt / suggestedSpacingPt)) *
+      Math.max(1, Math.floor(info.heightPt / suggestedSpacingPt));
+
+    const payload = {
+      uuid: info.uuid,
+      filePath: info.filePath,
+      pixelSize: {
+        width: widthPx,
+        height: heightPx,
+        longEdge: Math.max(widthPx, heightPx),
+      },
+      placedSizePt: {
+        width: info.widthPt,
+        height: info.heightPt,
+      },
+      scaling: {
+        baselinePx: baseline,
+        scaleFactor,
+      },
+      suggestedHalftone: {
+        dotSpacing: formatPt(suggestedSpacingPt),
+        minDotSize: formatPt(suggestedMinPt),
+        maxDotSize: formatPt(suggestedMaxPt),
+        estimatedGridCount,
+      },
+      note:
+        "Suggestions are optional. You can keep full manual control by overriding any value.",
+    };
+
+    return {
+      content: [{ type: "text", text: `Inspected successfully.\n\n${JSON.stringify(payload)}` }],
     };
   }
 );
