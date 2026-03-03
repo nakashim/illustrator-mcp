@@ -52,6 +52,13 @@ export const parseLengthToPt = (value: string): number => {
 };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+const hash32 = (value: number) => {
+  let x = value | 0;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  x = x ^ (x >>> 16);
+  return x >>> 0;
+};
 
 type ToneOptions = Pick<HalftoneOptions, "contrast" | "gamma" | "dotScale" | "invert">;
 
@@ -94,31 +101,39 @@ export const generateHalftoneDots = (
     throw new Error("Invalid target bounds for halftone.");
   }
 
-  // Keep requested spacing so users can control density directly.
-  const spacing = options.dotSpacingPt;
-
   const angle = (options.angleDeg * Math.PI) / 180;
   const sin = Math.sin(angle);
   const cos = Math.cos(angle);
   const centerX = (bounds.left + bounds.right) / 2;
   const centerY = (bounds.top + bounds.bottom) / 2;
-  const diagonal = Math.hypot(width, height);
-  const halfSpan = diagonal / 2 + spacing;
+  const spacing = options.dotSpacingPt;
+  const spacingX = spacing;
+  const spacingY = spacing;
+  const xCount = Math.max(1, Math.floor(width / spacingX));
+  const yCount = Math.max(1, Math.floor(height / spacingY));
+  const xRemainder = width - xCount * spacingX;
+  const yRemainder = height - yCount * spacingY;
+  const maxRadiusPt = Math.min(options.maxRadiusPt, spacing * 0.45);
+  const minRadiusPt = Math.min(options.minRadiusPt, maxRadiusPt);
 
   const dots: Dot[] = [];
-  for (let sy = -halfSpan; sy <= halfSpan; sy += spacing) {
-    for (let sx = -halfSpan; sx <= halfSpan; sx += spacing) {
-      // Build a rotated dot lattice in "screen" space, then map to doc space.
-      const x = centerX + cos * sx - sin * sy;
-      const y = centerY + sin * sx + cos * sy;
+  for (let gy = 1; gy <= yCount; gy += 1) {
+    for (let gx = 1; gx <= xCount; gx += 1) {
+      const baseX = bounds.left + gx * spacingX - spacingX / 2 + xRemainder / 2;
+      const baseY = bounds.top - (gy * spacingY - spacingY / 2 + yRemainder / 2);
+
+      const dx = baseX - centerX;
+      const dy = baseY - centerY;
+      const x = centerX + cos * dx - sin * dy;
+      const y = centerY + sin * dx + cos * dy;
       if (x < bounds.left || x > bounds.right || y < bounds.bottom || y > bounds.top) {
         continue;
       }
 
       const u = clamp01((x - bounds.left) / width);
       const v = clamp01((bounds.top - y) / height);
-      const du = clamp01(spacing / width);
-      const dv = clamp01(spacing / height);
+      const du = clamp01(spacingX / width);
+      const dv = clamp01(spacingY / height);
       const { luma, alpha } = sampleLumaAlpha(u, v, du, dv);
       const toneDarkness = applyToneAdjustments(luma, options);
       const darkness = clamp01(toneDarkness * clamp01(alpha));
@@ -126,7 +141,7 @@ export const generateHalftoneDots = (
         continue;
       }
 
-      const r = Math.max(options.minRadiusPt, darkness * options.maxRadiusPt);
+      const r = Math.max(minRadiusPt, darkness * maxRadiusPt);
       if (r <= 0.05) {
         continue;
       }
@@ -144,13 +159,17 @@ export const generateHalftoneDots = (
     return dots;
   }
 
-  // Downsample deterministically only when over maxDots.
-  const stride = dots.length / options.maxDots;
-  const capped: Dot[] = [];
-  for (let i = 0; i < options.maxDots; i += 1) {
-    capped.push(dots[Math.floor(i * stride)]);
-  }
-  return capped;
+  // Downsample deterministically using coordinate-based hashing to reduce stripe artifacts.
+  const ranked = dots
+    .map((dot, i) => {
+      const key = hash32((Math.round(dot.x * 10) * 73856093) ^ (Math.round(dot.y * 10) * 19349663) ^ i);
+      return { key, dot };
+    })
+    .sort((a, b) => a.key - b.key)
+    .slice(0, options.maxDots)
+    .map((entry) => entry.dot);
+
+  return ranked;
 };
 
 const buildPlacedItemInfoScript = (uuid: string) => `
