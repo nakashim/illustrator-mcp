@@ -99,8 +99,8 @@ var inputs = ${JSON.stringify(changes)};
 
 for (var i = 0; i < inputs.length; i++) {
   var item = getPageItem(inputs[i].uuid);
-  if (inputs[i].file) {
-    item.file = new File(inputs[i].file);
+  if (inputs[i].path) {
+    item.file = new File(inputs[i].path);
   }
   if (inputs[i].x) {
     item.left = toPt(inputs[i].x);

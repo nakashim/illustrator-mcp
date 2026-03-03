@@ -1,6 +1,7 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import fs, { mkdirSync } from "fs";
 import os from "os";
+import path from "path";
 
 import { jsonDefinition } from "./json";
 
@@ -20,8 +21,10 @@ export const executeExtendScript = (script: string) => {
     toPtDefinition,
   ];
 
+  const requestId = createRequestId();
+
   // ExtendScript 生成
-  const extendScriptPath = fs.realpathSync(`${dir}/message.jsx`);
+  const extendScriptPath = path.join(dir, `message-${requestId}.jsx`);
   // 文字化け防止のために，BOM 付きで保存
   const combinedScript = `\ufeff
 ${scriptDefinitions.join("\n")}
@@ -33,12 +36,29 @@ ${script}`;
     set resultText to do javascript of file "${extendScriptPath}"
 end tell
 return resultText`;
-  const appleScriptPath = fs.realpathSync(`${dir}/message.scpt`);
+  const appleScriptPath = path.join(dir, `message-${requestId}.scpt`);
   fs.writeFileSync(appleScriptPath, appleScript);
 
-  // 実行
-  const output = execSync(`osascript ${appleScriptPath}`);
-  return output.toString();
+  try {
+    // 実行
+    const output = execFileSync("osascript", [appleScriptPath], {
+      timeout: 30_000,
+    });
+    return output.toString();
+  } finally {
+    cleanupTempFile(extendScriptPath);
+    cleanupTempFile(appleScriptPath);
+  }
+};
+
+const createRequestId = () =>
+  `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+
+const cleanupTempFile = (filePath: string) => {
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+  fs.unlinkSync(filePath);
 };
 
 const toPtDefinition = `

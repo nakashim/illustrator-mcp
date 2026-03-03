@@ -1,15 +1,36 @@
 import { server } from "../server";
 import { z } from "zod";
 
+const SAFE_EXPRESSION_PATTERN = /^[0-9+\-*/%().,\s]+$/;
+
+export const evaluateArithmeticExpression = (expression: string) => {
+  if (!SAFE_EXPRESSION_PATTERN.test(expression)) {
+    return {
+      expression: expression,
+      error: "Invalid expression. Only numeric arithmetic is allowed.",
+    };
+  }
+
+  try {
+    return {
+      expression: expression,
+      result: new Function(`"use strict"; return (${expression});`)(),
+    };
+  } catch {
+    return {
+      expression: expression,
+      error: "Failed to evaluate expression.",
+    };
+  }
+};
+
 server.tool(
   "calc_expressions",
   "Calculates the results of the expressions.",
   { expressions: z.array(z.string()).describe("expressions") },
   async ({ expressions }) => {
-    const result = expressions.map((expression) => ({
-      expression: expression,
-      result: new Function(`return ${expression}`)(),
-    }));
+    const result = expressions.map(evaluateArithmeticExpression);
+
     return {
       content: [
         {
