@@ -24,6 +24,9 @@ type HalftoneOptions = {
   angleDeg: number;
   maxDots: number;
   invert: boolean;
+  contrast: number;
+  gamma: number;
+  dotScale: number;
 };
 
 type PlacedItemInfo = {
@@ -49,10 +52,35 @@ export const parseLengthToPt = (value: string): number => {
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
+type ToneOptions = Pick<HalftoneOptions, "contrast" | "gamma" | "dotScale" | "invert">;
+
+export const applyToneAdjustments = (luma: number, tone: ToneOptions) => {
+  let adjusted = clamp01(luma);
+
+  // Contrast range expected in [-100, 100].
+  const contrast = Math.max(-100, Math.min(100, tone.contrast));
+  if (contrast !== 0) {
+    const c255 = contrast * 2.55;
+    const factor = (259 * (c255 + 255)) / (255 * (259 - c255));
+    adjusted = clamp01(factor * (adjusted - 0.5) + 0.5);
+  }
+
+  // Gamma > 1 brightens mid-tones here by using inverse exponent.
+  const gamma = Math.max(0.1, tone.gamma);
+  adjusted = clamp01(Math.pow(adjusted, 1 / gamma));
+
+  let darkness = 1 - adjusted;
+  if (tone.invert) {
+    darkness = 1 - darkness;
+  }
+
+  return clamp01(darkness * Math.max(0, tone.dotScale));
+};
+
 export const generateHalftoneDots = (
   bounds: Bounds,
   options: HalftoneOptions,
-  sampleLuma: (u: number, v: number) => number
+  sampleLuma: (u: number, v: number, du: number, dv: number) => number
 ) => {
   const width = bounds.right - bounds.left;
   const height = bounds.top - bounds.bottom;
@@ -61,14 +89,17 @@ export const generateHalftoneDots = (
   }
 
   let spacing = options.dotSpacingPt;
-  let cols = Math.max(1, Math.floor(width / spacing) + 1);
-  let rows = Math.max(1, Math.floor(height / spacing) + 1);
-  const total = rows * cols;
-  if (total > options.maxDots) {
-    const scale = Math.sqrt(total / options.maxDots);
+  const estimateTotal = (s: number) => {
+    const diagonal = Math.hypot(width, height);
+    const span = diagonal + s;
+    const count = Math.max(1, Math.floor(span / s) + 1);
+    return count * count;
+  };
+  let estimated = estimateTotal(spacing);
+  if (estimated > options.maxDots) {
+    const scale = Math.sqrt(estimated / options.maxDots);
     spacing *= scale;
-    cols = Math.max(1, Math.floor(width / spacing) + 1);
-    rows = Math.max(1, Math.floor(height / spacing) + 1);
+    estimated = estimateTotal(spacing);
   }
 
   const angle = (options.angleDeg * Math.PI) / 180;
@@ -76,22 +107,29 @@ export const generateHalftoneDots = (
   const cos = Math.cos(angle);
   const centerX = (bounds.left + bounds.right) / 2;
   const centerY = (bounds.top + bounds.bottom) / 2;
+  const diagonal = Math.hypot(width, height);
+  const halfSpan = diagonal / 2 + spacing;
 
   const dots: Dot[] = [];
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      const x = bounds.left + col * spacing;
-      const y = bounds.top - row * spacing;
+  for (let sy = -halfSpan; sy <= halfSpan; sy += spacing) {
+    for (let sx = -halfSpan; sx <= halfSpan; sx += spacing) {
+      // Build a rotated dot lattice in "screen" space, then map to doc space.
+      const x = centerX + cos * sx - sin * sy;
+      const y = centerY + sin * sx + cos * sy;
+      if (x < bounds.left || x > bounds.right || y < bounds.bottom || y > bounds.top) {
+        continue;
+      }
+
       const u = clamp01((x - bounds.left) / width);
       const v = clamp01((bounds.top - y) / height);
-      let luma = clamp01(sampleLuma(u, v));
-      if (options.invert) {
-        luma = 1 - luma;
-      }
+      const du = clamp01(spacing / width);
+      const dv = clamp01(spacing / height);
+      const luma = clamp01(sampleLuma(u, v, du, dv));
+      const darkness = applyToneAdjustments(luma, options);
 
       const r =
         options.minRadiusPt +
-        (1 - luma) * (options.maxRadiusPt - options.minRadiusPt);
+        darkness * (options.maxRadiusPt - options.minRadiusPt);
       if (r <= 0.05) {
         continue;
       }
@@ -185,6 +223,24 @@ const halftoneSchema = {
     .optional()
     .describe("Maximum dot diameter (mm/Q/pt). Default: 1.6mm"),
   angleDeg: z.number().optional().describe("Halftone screen angle. Default: 45"),
+  contrast: z
+    .number()
+    .min(-100)
+    .max(100)
+    .optional()
+    .describe("Contrast adjustment (-100 to 100). Default: 0"),
+  gamma: z
+    .number()
+    .min(0.1)
+    .max(5)
+    .optional()
+    .describe("Gamma adjustment (0.1 to 5). Default: 1"),
+  dotScale: z
+    .number()
+    .min(0)
+    .max(3)
+    .optional()
+    .describe("Dot intensity scale multiplier. Default: 1"),
   invert: z.boolean().optional().describe("Invert brightness mapping"),
   maxDots: z.number().int().min(100).max(20000).optional(),
   colorCmyk: z
@@ -205,6 +261,9 @@ server.tool(
     minDotSize,
     maxDotSize,
     angleDeg,
+    contrast,
+    gamma,
+    dotScale,
     invert,
     maxDots,
     colorCmyk,
@@ -226,20 +285,35 @@ server.tool(
       maxRadiusPt: parseLengthToPt(maxDotSize ?? "1.6mm") / 2,
       angleDeg: angleDeg ?? 45,
       invert: invert ?? false,
+      contrast: contrast ?? 0,
+      gamma: gamma ?? 1,
+      dotScale: dotScale ?? 1,
       maxDots: maxDots ?? 2500,
     };
 
-    const dots = generateHalftoneDots(item.bounds, options, (u, v) => {
-      const x = Math.min(
-        image.bitmap.width - 1,
-        Math.max(0, Math.round(u * (image.bitmap.width - 1)))
-      );
-      const y = Math.min(
-        image.bitmap.height - 1,
-        Math.max(0, Math.round(v * (image.bitmap.height - 1)))
-      );
-      const rgba = intToRGBA(image.getPixelColor(x, y));
-      return (0.299 * rgba.r + 0.587 * rgba.g + 0.114 * rgba.b) / 255;
+    const dots = generateHalftoneDots(item.bounds, options, (u, v, du, dv) => {
+      // Cell-average sampling using a compact 3x3 grid reduces center bias and noise.
+      let sum = 0;
+      let count = 0;
+      const grid = 3;
+      for (let gy = 0; gy < grid; gy += 1) {
+        for (let gx = 0; gx < grid; gx += 1) {
+          const su = clamp01(u + ((gx / (grid - 1)) - 0.5) * du);
+          const sv = clamp01(v + ((gy / (grid - 1)) - 0.5) * dv);
+          const x = Math.min(
+            image.bitmap.width - 1,
+            Math.max(0, Math.round(su * (image.bitmap.width - 1)))
+          );
+          const y = Math.min(
+            image.bitmap.height - 1,
+            Math.max(0, Math.round(sv * (image.bitmap.height - 1)))
+          );
+          const rgba = intToRGBA(image.getPixelColor(x, y));
+          sum += (0.299 * rgba.r + 0.587 * rgba.g + 0.114 * rgba.b) / 255;
+          count += 1;
+        }
+      }
+      return count > 0 ? sum / count : 1;
     });
 
     const drawResult = executeExtendScript(

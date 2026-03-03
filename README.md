@@ -97,3 +97,7 @@ Important notes:
 
 - This MVP currently targets linked image files (not embedded-only raster items).
 - Use conservative settings first (`dotSpacing` around `2mm`, `maxDots` around `2500`) to avoid heavy artwork.
+- Quality tuning parameters:
+  - `contrast` (`-100` to `100`)
+  - `gamma` (`0.1` to `5`)
+  - `dotScale` (`0` to `3`)
