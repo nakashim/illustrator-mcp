@@ -31,8 +31,9 @@ describe("halftone helpers", () => {
         contrast: 0,
         gamma: 1,
         dotScale: 1,
+        backgroundThreshold: 0.06,
       },
-      () => 0.5
+      () => ({ luma: 0.5, alpha: 1 })
     );
 
     expect(dots.length).toBeGreaterThan(0);
@@ -68,5 +69,30 @@ describe("halftone helpers", () => {
     expect(base).toBeGreaterThan(0);
     expect(scaled).toBeGreaterThan(base);
     expect(inverted).toBeCloseTo(1 - base, 4);
+  });
+
+  it("skips dots when alpha/background threshold removes them", () => {
+    const dots = generateHalftoneDots(
+      {
+        left: 0,
+        top: 100,
+        right: 100,
+        bottom: 0,
+      },
+      {
+        dotSpacingPt: 20,
+        minRadiusPt: 1,
+        maxRadiusPt: 4,
+        angleDeg: 0,
+        maxDots: 1000,
+        invert: false,
+        contrast: 0,
+        gamma: 1,
+        dotScale: 1,
+        backgroundThreshold: 0.06,
+      },
+      () => ({ luma: 1, alpha: 0 })
+    );
+    expect(dots.length).toBe(0);
   });
 });

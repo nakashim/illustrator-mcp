@@ -101,3 +101,4 @@ Important notes:
   - `contrast` (`-100` to `100`)
   - `gamma` (`0.1` to `5`)
   - `dotScale` (`0` to `3`)
+  - `backgroundThreshold` (`0` to `1`, default `0.06`)

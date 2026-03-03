@@ -27,6 +27,7 @@ type HalftoneOptions = {
   contrast: number;
   gamma: number;
   dotScale: number;
+  backgroundThreshold: number;
 };
 
 type PlacedItemInfo = {
@@ -80,7 +81,12 @@ export const applyToneAdjustments = (luma: number, tone: ToneOptions) => {
 export const generateHalftoneDots = (
   bounds: Bounds,
   options: HalftoneOptions,
-  sampleLuma: (u: number, v: number, du: number, dv: number) => number
+  sampleLumaAlpha: (
+    u: number,
+    v: number,
+    du: number,
+    dv: number
+  ) => { luma: number; alpha: number }
 ) => {
   const width = bounds.right - bounds.left;
   const height = bounds.top - bounds.bottom;
@@ -88,19 +94,8 @@ export const generateHalftoneDots = (
     throw new Error("Invalid target bounds for halftone.");
   }
 
-  let spacing = options.dotSpacingPt;
-  const estimateTotal = (s: number) => {
-    const diagonal = Math.hypot(width, height);
-    const span = diagonal + s;
-    const count = Math.max(1, Math.floor(span / s) + 1);
-    return count * count;
-  };
-  let estimated = estimateTotal(spacing);
-  if (estimated > options.maxDots) {
-    const scale = Math.sqrt(estimated / options.maxDots);
-    spacing *= scale;
-    estimated = estimateTotal(spacing);
-  }
+  // Keep requested spacing so users can control density directly.
+  const spacing = options.dotSpacingPt;
 
   const angle = (options.angleDeg * Math.PI) / 180;
   const sin = Math.sin(angle);
@@ -124,27 +119,38 @@ export const generateHalftoneDots = (
       const v = clamp01((bounds.top - y) / height);
       const du = clamp01(spacing / width);
       const dv = clamp01(spacing / height);
-      const luma = clamp01(sampleLuma(u, v, du, dv));
-      const darkness = applyToneAdjustments(luma, options);
+      const { luma, alpha } = sampleLumaAlpha(u, v, du, dv);
+      const toneDarkness = applyToneAdjustments(luma, options);
+      const darkness = clamp01(toneDarkness * clamp01(alpha));
+      if (darkness <= options.backgroundThreshold) {
+        continue;
+      }
 
-      const r =
-        options.minRadiusPt +
-        darkness * (options.maxRadiusPt - options.minRadiusPt);
+      const r = Math.max(options.minRadiusPt, darkness * options.maxRadiusPt);
       if (r <= 0.05) {
         continue;
       }
 
-      const dx = x - centerX;
-      const dy = y - centerY;
       dots.push({
-        x: centerX + cos * dx - sin * dy,
-        y: centerY + sin * dx + cos * dy,
+        // x/y is already on the rotated screen grid.
+        x,
+        y,
         r,
       });
     }
   }
 
-  return dots;
+  if (dots.length <= options.maxDots) {
+    return dots;
+  }
+
+  // Downsample deterministically only when over maxDots.
+  const stride = dots.length / options.maxDots;
+  const capped: Dot[] = [];
+  for (let i = 0; i < options.maxDots; i += 1) {
+    capped.push(dots[Math.floor(i * stride)]);
+  }
+  return capped;
 };
 
 const buildPlacedItemInfoScript = (uuid: string) => `
@@ -241,8 +247,14 @@ const halftoneSchema = {
     .max(3)
     .optional()
     .describe("Dot intensity scale multiplier. Default: 1"),
+  backgroundThreshold: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Skip dots below this effective darkness. Default: 0.06"),
   invert: z.boolean().optional().describe("Invert brightness mapping"),
-  maxDots: z.number().int().min(100).max(20000).optional(),
+  maxDots: z.number().int().min(100).max(100000).optional(),
   colorCmyk: z
     .array(z.number())
     .length(4)
@@ -264,6 +276,7 @@ server.tool(
     contrast,
     gamma,
     dotScale,
+    backgroundThreshold,
     invert,
     maxDots,
     colorCmyk,
@@ -288,12 +301,14 @@ server.tool(
       contrast: contrast ?? 0,
       gamma: gamma ?? 1,
       dotScale: dotScale ?? 1,
+      backgroundThreshold: backgroundThreshold ?? 0.06,
       maxDots: maxDots ?? 2500,
     };
 
     const dots = generateHalftoneDots(item.bounds, options, (u, v, du, dv) => {
       // Cell-average sampling using a compact 3x3 grid reduces center bias and noise.
-      let sum = 0;
+      let sumLuma = 0;
+      let sumAlpha = 0;
       let count = 0;
       const grid = 3;
       for (let gy = 0; gy < grid; gy += 1) {
@@ -309,11 +324,18 @@ server.tool(
             Math.max(0, Math.round(sv * (image.bitmap.height - 1)))
           );
           const rgba = intToRGBA(image.getPixelColor(x, y));
-          sum += (0.299 * rgba.r + 0.587 * rgba.g + 0.114 * rgba.b) / 255;
+          sumLuma += (0.299 * rgba.r + 0.587 * rgba.g + 0.114 * rgba.b) / 255;
+          sumAlpha += rgba.a / 255;
           count += 1;
         }
       }
-      return count > 0 ? sum / count : 1;
+      if (count <= 0) {
+        return { luma: 1, alpha: 0 };
+      }
+      return {
+        luma: sumLuma / count,
+        alpha: sumAlpha / count,
+      };
     });
 
     const drawResult = executeExtendScript(
