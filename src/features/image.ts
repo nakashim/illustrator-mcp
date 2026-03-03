@@ -1,26 +1,38 @@
 import z from "zod";
 
 import { server } from "../server";
-import { executeExtendScript } from "../extend-utils/utils";
+import { formatPt, parseLengthToPt } from "../core/halftone";
+import {
+  changeImages,
+  getPlacedImageInfo,
+  listImages,
+  placeImages,
+} from "../adapters/illustrator";
+import type { ImageChangeInput } from "../adapters/illustrator";
+import { readImageSize } from "../adapters/image";
+
+type InspectImageInput = {
+  targetUuid: string;
+  baselinePx?: number;
+  baseDotSpacing?: string;
+  baseMinDotSize?: string;
+  baseMaxDotSize?: string;
+};
+
+export const computeScaleFactor = (pixelWidth: number, pixelHeight: number, baselinePx: number) => {
+  const longEdge = Math.max(pixelWidth, pixelHeight);
+  if (baselinePx <= 0) {
+    return 1;
+  }
+  return longEdge / baselinePx;
+};
 
 server.tool(
   "create_images",
   "Places multiple images in the document.",
   { paths: z.array(z.string()).describe("Absolute image paths.") },
   async ({ paths }) => {
-    const script = `
-var doc = getDocument();
-var paths = ${JSON.stringify(paths)};
-var result = [];
-for (var i = 0; i < paths.length; i++) {
-  var image = doc.placedItems.add();
-  image.file = new File(paths[i]);
-  image.note = createUUID();
-  result.push({ uuid: image.note });
-}
-JSON.stringify(result);
-`;
-    const output = executeExtendScript(script);
+    const output = placeImages(paths);
     return {
       content: [
         {
@@ -37,29 +49,95 @@ server.tool(
   "Gets information of existing images.",
   {},
   async () => {
-    const script = `
-var doc = getDocument();
-var result = [];
-for (var i = 0; i < doc.placedItems.length; i++) {
-  var item = doc.placedItems[i];
-  if (!item.note) {
-    item.note = createUUID();
-  }
-  result.push({
-    uuid: item.note,
-    path: item.file.name,
-    x: ptToMm(item.left),
-    y: ptToMm(-item.top),
-    width: ptToMm(item.width),
-    height: ptToMm(item.height),
-    selected: item.selected,
-  });
-}
-JSON.stringify(result);
-`;
-    const output = executeExtendScript(script);
+    const output = listImages();
     return {
       content: [{ type: "text", text: `Retrieved successfully.\n\n${output}` }],
+    };
+  }
+);
+
+server.tool(
+  "inspect_image",
+  "Inspect an image and return size + suggested halftone scaling.",
+  {
+    targetUuid: z.string().describe("UUID of a placed image item"),
+    baselinePx: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Baseline long-edge size in px for scaling recommendations (default: 1200)"),
+    baseDotSpacing: z
+      .string()
+      .optional()
+      .describe("Base dot spacing to scale (default: 5pt)"),
+    baseMinDotSize: z
+      .string()
+      .optional()
+      .describe("Base min dot size to scale (default: 0.35pt)"),
+    baseMaxDotSize: z
+      .string()
+      .optional()
+      .describe("Base max dot size to scale (default: 4.6pt)"),
+  },
+  async ({
+    targetUuid,
+    baselinePx,
+    baseDotSpacing,
+    baseMinDotSize,
+    baseMaxDotSize,
+  }: InspectImageInput) => {
+    const info = getPlacedImageInfo(targetUuid);
+
+    if (!info.filePath) {
+      throw new Error("Target item has no linked file path.");
+    }
+
+    const { width: widthPx, height: heightPx } = await readImageSize(info.filePath);
+    const baseline = baselinePx ?? 1200;
+    const scaleFactor = computeScaleFactor(widthPx, heightPx, baseline);
+
+    const baseSpacingPt = parseLengthToPt(baseDotSpacing ?? "5pt");
+    const baseMinPt = parseLengthToPt(baseMinDotSize ?? "0.35pt");
+    const baseMaxPt = parseLengthToPt(baseMaxDotSize ?? "4.6pt");
+
+    const suggestedSpacingPt = baseSpacingPt * scaleFactor;
+    const suggestedMinPt = baseMinPt * scaleFactor;
+    const suggestedMaxPt = baseMaxPt * scaleFactor;
+
+    // Approximate dot count before threshold/drop, useful for safety planning.
+    const estimatedGridCount =
+      Math.max(1, Math.floor(info.widthPt / suggestedSpacingPt)) *
+      Math.max(1, Math.floor(info.heightPt / suggestedSpacingPt));
+
+    const payload = {
+      uuid: info.uuid,
+      filePath: info.filePath,
+      pixelSize: {
+        width: widthPx,
+        height: heightPx,
+        longEdge: Math.max(widthPx, heightPx),
+      },
+      placedSizePt: {
+        width: info.widthPt,
+        height: info.heightPt,
+      },
+      scaling: {
+        baselinePx: baseline,
+        scaleFactor,
+      },
+      suggestedHalftone: {
+        dotSpacing: formatPt(suggestedSpacingPt),
+        minDotSize: formatPt(suggestedMinPt),
+        maxDotSize: formatPt(suggestedMaxPt),
+        estimatedGridCount,
+      },
+      note:
+        "Suggestions are optional. You can keep full manual control by overriding any value.",
+    };
+
+    return {
+      content: [{ type: "text", text: `Inspected successfully.\n\n${JSON.stringify(payload)}` }],
     };
   }
 );
@@ -94,37 +172,7 @@ server.tool(
     changes: multipleImageChangeSchema,
   },
   async ({ changes }) => {
-    const script = `
-var inputs = ${JSON.stringify(changes)};
-
-for (var i = 0; i < inputs.length; i++) {
-  var item = getPageItem(inputs[i].uuid);
-  if (inputs[i].file) {
-    item.file = new File(inputs[i].file);
-  }
-  if (inputs[i].x) {
-    item.left = toPt(inputs[i].x);
-  }
-  if (inputs[i].y) {
-    item.top = -toPt(inputs[i].y);
-  }
-  if (inputs[i].width) {
-    var afterWidth = toPt(inputs[i].width);
-    if (inputs[i].maintainAspectRatio) {
-      item.height = afterWidth * (item.height / item.width);
-    }
-    item.width = afterWidth;
-  }
-  if (inputs[i].height) {
-    var afterHeight = toPt(inputs[i].height);
-    if (inputs[i].maintainAspectRatio) {
-      item.width = afterHeight * (item.width / item.height);
-    }
-    item.height = afterHeight;
-  }
-}
-`;
-    executeExtendScript(script);
+    changeImages(changes as ImageChangeInput[]);
     return {
       content: [{ type: "text", text: "Changed successfully." }],
     };

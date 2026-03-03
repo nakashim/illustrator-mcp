@@ -2,10 +2,12 @@
   "scripts": {
     "run": "tsx index.js",
     "build": "tsc && chmod 755 build/index.js",
-    "test": "vitest run ."
+    "test": "vitest run .",
+    "test:smoke": "node scripts/smoke-e2e.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2",
+    "jimp": "^1.6.0",
     "zod": "^3.24.3"
   },
   "devDependencies": {

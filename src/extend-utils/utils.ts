@@ -1,14 +1,92 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import fs, { mkdirSync } from "fs";
 import os from "os";
+import path from "path";
 
 import { jsonDefinition } from "./json";
 
-export const executeExtendScript = (script: string) => {
+const DEFAULT_OSASCRIPT_TIMEOUT_MS = 120_000;
+const DEFAULT_RETRY_COUNT = 1;
+
+type ExecuteExtendScriptOptions = {
+  timeoutMs?: number;
+  retries?: number;
+};
+
+export type ExecutionErrorKind =
+  | "timeout"
+  | "connection_invalid"
+  | "no_such_object"
+  | "permission_denied"
+  | "script_syntax_error"
+  | "unknown";
+
+type ExecutionErrorInfo = {
+  kind: ExecutionErrorKind;
+  message: string;
+};
+
+const getErrorMessage = (error: unknown) => {
+  if (typeof error === "string") {
+    return error;
+  }
+  if (typeof error !== "object" || error === null) {
+    return "";
+  }
+
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  const stderr =
+    "stderr" in error && (error as { stderr?: unknown }).stderr
+      ? String((error as { stderr?: unknown }).stderr)
+      : "";
+  return `${message}\n${stderr}`.trim();
+};
+
+export const classifyExecutionError = (error: unknown): ExecutionErrorInfo => {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  const message = getErrorMessage(error);
+
+  if (code === "ETIMEDOUT" || message.includes("ETIMEDOUT")) {
+    return { kind: "timeout", message };
+  }
+  if (message.includes("Connection invalid") || message.includes("(-609)")) {
+    return { kind: "connection_invalid", message };
+  }
+  if (message.includes("kAENoSuchObject")) {
+    return { kind: "no_such_object", message };
+  }
+  if (
+    message.includes("Not authorized to send Apple events") ||
+    message.includes("Operation not permitted")
+  ) {
+    return { kind: "permission_denied", message };
+  }
+  if (message.includes("Expected end of line but found identifier")) {
+    return { kind: "script_syntax_error", message };
+  }
+  return { kind: "unknown", message };
+};
+
+export const shouldRetryExecutionError = (error: unknown) => {
+  const info = classifyExecutionError(error);
+  return info.kind === "connection_invalid" || info.kind === "no_such_object";
+};
+
+export const toExtendScriptStringLiteral = (value: string) =>
+  JSON.stringify(value);
+
+export const executeExtendScript = (
+  script: string,
+  options?: ExecuteExtendScriptOptions
+) => {
   // 一時フォルダ生成
-  const dir = `${os.homedir()}/illustrator-mcp-tmp`;
+  const dir =
+    process.env.ILLUSTRATOR_MCP_TMP_DIR ?? `${os.homedir()}/illustrator-mcp-tmp`;
   if (!fs.existsSync(dir)) {
-    mkdirSync(dir);
+    mkdirSync(dir, { recursive: true });
   }
 
   const scriptDefinitions = [
@@ -20,8 +98,10 @@ export const executeExtendScript = (script: string) => {
     toPtDefinition,
   ];
 
+  const requestId = createRequestId();
+
   // ExtendScript 生成
-  const extendScriptPath = fs.realpathSync(`${dir}/message.jsx`);
+  const extendScriptPath = path.join(dir, `message-${requestId}.jsx`);
   // 文字化け防止のために，BOM 付きで保存
   const combinedScript = `\ufeff
 ${scriptDefinitions.join("\n")}
@@ -29,16 +109,50 @@ ${script}`;
   fs.writeFileSync(extendScriptPath, combinedScript);
 
   // AppleScript 生成
+  const appleScriptPathLiteral = extendScriptPath
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"');
   const appleScript = `tell application "Adobe Illustrator"
-    set resultText to do javascript of file "${extendScriptPath}"
+    set resultText to do javascript of file "${appleScriptPathLiteral}"
 end tell
 return resultText`;
-  const appleScriptPath = fs.realpathSync(`${dir}/message.scpt`);
+  const appleScriptPath = path.join(dir, `message-${requestId}.scpt`);
   fs.writeFileSync(appleScriptPath, appleScript);
 
-  // 実行
-  const output = execSync(`osascript ${appleScriptPath}`);
-  return output.toString();
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_OSASCRIPT_TIMEOUT_MS;
+  const retries = options?.retries ?? DEFAULT_RETRY_COUNT;
+
+  try {
+    let attempt = 0;
+    while (true) {
+      try {
+        // 実行
+        const output = execFileSync("osascript", [appleScriptPath], {
+          timeout: timeoutMs,
+        });
+        return output.toString();
+      } catch (error) {
+        const canRetry = attempt < retries && shouldRetryExecutionError(error);
+        if (!canRetry) {
+          throw error;
+        }
+        attempt += 1;
+      }
+    }
+  } finally {
+    cleanupTempFile(extendScriptPath);
+    cleanupTempFile(appleScriptPath);
+  }
+};
+
+const createRequestId = () =>
+  `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+
+const cleanupTempFile = (filePath: string) => {
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+  fs.unlinkSync(filePath);
 };
 
 const toPtDefinition = `
