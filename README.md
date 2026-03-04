@@ -134,6 +134,33 @@ Important notes:
   - `dotScale` (`0` to `3`)
   - `backgroundThreshold` (`0` to `1`, default `0.06`)
 
+## Mosaic Tile Vector
+
+- Tool: `mosaic_tile_vector`
+- Purpose: Convert a linked placed image into vector tile mosaic blocks.
+- Core options:
+  - `tileSize` (default `3mm`)
+  - `gap` (default `0mm`)
+  - `cornerRadius` (default `0mm`)
+  - `maxTiles` (default `20000`)
+  - `backgroundThreshold` (default `0.02`)
+  - `grayscale` (default `false`, uses sampled color when false)
+
+## Dither Vector (Phase 1)
+
+- Tool: `dither_vector`
+- Purpose: Convert a linked placed image into monochrome dither tiles.
+- Core options:
+  - `pixelSize` (default `2mm`)
+  - `pattern` (`bayer4`, `bayer8`, or `random`, default `bayer4`)
+  - `threshold` (`0..1`, default `0.5`)
+  - `invert` (default `false`)
+  - `maxTiles` (default `40000`)
+  - `backgroundThreshold` (default `0.02`)
+  - `colorMode` (`mono` or `rgb`, default `mono`)
+  - `gamma` (default `1`)
+  - `blackPoint` / `whitePoint` (default `0` / `1`)
+
 ## Halftone Suggestions
 
 - Tool: `suggest_halftone_params`

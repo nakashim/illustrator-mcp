@@ -109,11 +109,9 @@ ${script}`;
   fs.writeFileSync(extendScriptPath, combinedScript);
 
   // AppleScript 生成
-  const appleScriptPathLiteral = extendScriptPath
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"');
-  const appleScript = `tell application "Adobe Illustrator"
-    set resultText to do javascript of file "${appleScriptPathLiteral}"
+  const appleScript = `set scriptFile to POSIX file ${JSON.stringify(extendScriptPath)}
+tell application "Adobe Illustrator"
+    set resultText to do javascript of scriptFile
 end tell
 return resultText`;
   const appleScriptPath = path.join(dir, `message-${requestId}.scpt`);
@@ -149,6 +147,9 @@ const createRequestId = () =>
   `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 
 const cleanupTempFile = (filePath: string) => {
+  if (process.env.ILLUSTRATOR_MCP_KEEP_TMP === "1") {
+    return;
+  }
   if (!fs.existsSync(filePath)) {
     return;
   }

@@ -1,6 +1,6 @@
 export { getPlacedImageInfo } from "./placed-image";
 export type { PlacedImageInfo } from "./placed-image";
-export { drawHalftoneDots } from "./halftone";
+export { drawHalftoneDots, drawMosaicTiles } from "./halftone";
 export { placeImages, listImages, changeImages } from "./images";
 export type { ImageChangeInput } from "./images";
 export {
