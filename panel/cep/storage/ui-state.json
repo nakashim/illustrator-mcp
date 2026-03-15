@@ -1,0 +1,241 @@
+{
+  "version": 1,
+  "updatedAt": "2026-03-15T14:12:01.079Z",
+  "feature": {
+    "activeFeatureId": "image-to-vector"
+  },
+  "imageToVector": {
+    "unit": "mm",
+    "autoSyncTarget": true,
+    "effect": "dither",
+    "params": {
+      "dotSpacing": "15.1px",
+      "minDotSize": "5.3px",
+      "maxDotSize": "15.9px",
+      "angleDeg": 82,
+      "maxDots": 67323,
+      "pixelSize": "50mm",
+      "threshold": 0.43000000000000005,
+      "maxTiles": 39259,
+      "tileSize": "30mm",
+      "cornerRadius": "0mm",
+      "gap": "0mm",
+      "grayscale": false,
+      "pattern": "bayer2",
+      "colorMode": "rgb",
+      "invert": false
+    },
+    "paramsByEffect": {
+      "dither": {
+        "dotSpacing": "15.1px",
+        "minDotSize": "5.3px",
+        "maxDotSize": "15.9px",
+        "angleDeg": 82,
+        "maxDots": 67323,
+        "pixelSize": "50mm",
+        "threshold": 0.43000000000000005,
+        "maxTiles": 39259,
+        "pattern": "bayer2",
+        "colorMode": "rgb",
+        "invert": false
+      },
+      "halftone": {
+        "dotSpacing": "15.1px",
+        "minDotSize": "5.3px",
+        "maxDotSize": "15.9px",
+        "angleDeg": 82,
+        "maxDots": 67323
+      },
+      "mosaic": {
+        "tileSize": "30mm",
+        "maxTiles": 24103,
+        "cornerRadius": "0mm",
+        "gap": "0mm",
+        "grayscale": false
+      }
+    },
+    "exportPath": "/Users/ncst/Develop/illustrator-mcp",
+    "exportFormat": "svg",
+    "presetName": "preset_dither_20260315_230151",
+    "presetSelect": "",
+    "exportFileName": "dither_20260315_230151",
+    "settingsTab": "parameters",
+    "savePointName": "history_dither_20260315_230151"
+  },
+  "ui": {
+    "folders": {
+      "target": true,
+      "preview": true,
+      "preset": true,
+      "parameters": true,
+      "export": true,
+      "debug": false,
+      "history": true
+    },
+    "savePoints": {
+      "imageToVector": [
+        {
+          "id": "sp_1773515099802",
+          "label": "2026/03/15 04:04:59 | mosaic_20260314_203125 | mosaic",
+          "snapshot": {
+            "imageToVector": {
+              "unit": "px",
+              "autoSyncTarget": true,
+              "effect": "mosaic",
+              "params": {
+                "tileSize": "21.2px",
+                "maxTiles": 23590,
+                "cornerRadius": "4.6px",
+                "gap": "1.4px"
+              },
+              "paramsByEffect": {
+                "dither": {
+                  "dotSpacing": "15.1px",
+                  "minDotSize": "5.3px",
+                  "maxDotSize": "15.9px",
+                  "angleDeg": 82,
+                  "maxDots": 67323,
+                  "pixelSize": "8px",
+                  "threshold": 0.5700000000000001,
+                  "maxTiles": 39259
+                },
+                "halftone": {
+                  "dotSpacing": "15.1px",
+                  "minDotSize": "5.3px",
+                  "maxDotSize": "15.9px",
+                  "angleDeg": 82,
+                  "maxDots": 67323
+                },
+                "mosaic": {
+                  "tileSize": "21.2px",
+                  "maxTiles": 23590,
+                  "cornerRadius": "4.6px",
+                  "gap": "1.4px"
+                }
+              },
+              "exportPath": "/Users/ncst/Develop/illustrator-mcp",
+              "exportFileName": "mosaic_20260314_203125",
+              "exportFormat": "svg",
+              "presetName": "",
+              "presetSelect": ""
+            },
+            "ui": {
+              "folders": {
+                "target": true,
+                "preview": true,
+                "preset": true,
+                "parameters": true,
+                "history": true,
+                "debug": false,
+                "export": true
+              }
+            }
+          }
+        },
+        {
+          "id": "sp_1773487887813",
+          "label": "2026/03/14 20:31:27 | mosaic_20260314_203125 | mosaic",
+          "snapshot": {
+            "imageToVector": {
+              "unit": "px",
+              "autoSyncTarget": true,
+              "effect": "mosaic",
+              "params": {},
+              "paramsByEffect": {
+                "dither": {
+                  "dotSpacing": "15.1px",
+                  "minDotSize": "5.3px",
+                  "maxDotSize": "15.9px",
+                  "angleDeg": 82,
+                  "maxDots": 67323,
+                  "pixelSize": "8px",
+                  "threshold": 0.5700000000000001,
+                  "maxTiles": 39259
+                },
+                "halftone": {
+                  "dotSpacing": "15.1px",
+                  "minDotSize": "5.3px",
+                  "maxDotSize": "15.9px",
+                  "angleDeg": 82,
+                  "maxDots": 67323
+                },
+                "mosaic": {}
+              },
+              "exportPath": "/Users/ncst/Develop/illustrator-mcp",
+              "exportFileName": "mosaic_20260314_203125",
+              "exportFormat": "svg",
+              "presetName": "",
+              "presetSelect": ""
+            },
+            "ui": {
+              "folders": {
+                "target": true,
+                "preview": true,
+                "preset": true,
+                "parameters": true,
+                "history": true,
+                "debug": false,
+                "export": true
+              }
+            }
+          }
+        },
+        {
+          "id": "sp_1773487584637",
+          "label": "2026/03/14 20:26:24 | halftone_20260314_202057 | halftone",
+          "snapshot": {
+            "imageToVector": {
+              "unit": "px",
+              "autoSyncTarget": true,
+              "effect": "halftone",
+              "params": {
+                "dotSpacing": "15.1px",
+                "minDotSize": "5.3px",
+                "maxDotSize": "15.9px",
+                "angleDeg": 82,
+                "maxDots": 67323
+              },
+              "paramsByEffect": {
+                "dither": {
+                  "dotSpacing": "15.1px",
+                  "minDotSize": "5.3px",
+                  "maxDotSize": "15.9px",
+                  "angleDeg": 82,
+                  "maxDots": 67323,
+                  "pixelSize": "8px",
+                  "threshold": 0.5700000000000001,
+                  "maxTiles": 39259
+                },
+                "halftone": {
+                  "dotSpacing": "15.1px",
+                  "minDotSize": "5.3px",
+                  "maxDotSize": "15.9px",
+                  "angleDeg": 82,
+                  "maxDots": 67323
+                },
+                "mosaic": {}
+              },
+              "exportPath": "/Users/ncst/Develop/illustrator-mcp",
+              "exportFileName": "halftone_20260314_202057",
+              "exportFormat": "svg",
+              "presetName": "",
+              "presetSelect": ""
+            },
+            "ui": {
+              "folders": {
+                "target": true,
+                "preview": true,
+                "preset": true,
+                "parameters": true,
+                "history": true,
+                "debug": false,
+                "export": true
+              }
+            }
+          }
+        }
+      ],
+      "imageToVectorSelectedIndex": -1
+    }
+  }
+}

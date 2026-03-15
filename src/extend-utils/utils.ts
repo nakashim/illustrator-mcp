@@ -11,6 +11,7 @@ const DEFAULT_RETRY_COUNT = 1;
 type ExecuteExtendScriptOptions = {
   timeoutMs?: number;
   retries?: number;
+  requireIllustratorRunning?: boolean;
 };
 
 export type ExecutionErrorKind =
@@ -19,6 +20,7 @@ export type ExecutionErrorKind =
   | "no_such_object"
   | "permission_denied"
   | "script_syntax_error"
+  | "not_running"
   | "unknown";
 
 type ExecutionErrorInfo = {
@@ -67,6 +69,9 @@ export const classifyExecutionError = (error: unknown): ExecutionErrorInfo => {
   if (message.includes("Expected end of line but found identifier")) {
     return { kind: "script_syntax_error", message };
   }
+  if (message.includes("Adobe Illustrator is not running")) {
+    return { kind: "not_running", message };
+  }
   return { kind: "unknown", message };
 };
 
@@ -82,6 +87,10 @@ export const executeExtendScript = (
   script: string,
   options?: ExecuteExtendScriptOptions
 ) => {
+  if (options?.requireIllustratorRunning && !isIllustratorRunning()) {
+    throw new Error("Adobe Illustrator is not running.");
+  }
+
   // 一時フォルダ生成
   const dir =
     process.env.ILLUSTRATOR_MCP_TMP_DIR ?? `${os.homedir()}/illustrator-mcp-tmp`;
@@ -154,6 +163,20 @@ const cleanupTempFile = (filePath: string) => {
     return;
   }
   fs.unlinkSync(filePath);
+};
+
+const isIllustratorRunning = () => {
+  try {
+    const output = execFileSync("osascript", ["-e", 'application "Adobe Illustrator" is running'], {
+      timeout: 5_000,
+    })
+      .toString()
+      .trim()
+      .toLowerCase();
+    return output === "true";
+  } catch {
+    return false;
+  }
 };
 
 const toPtDefinition = `

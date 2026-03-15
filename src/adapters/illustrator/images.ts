@@ -28,7 +28,11 @@ JSON.stringify(result);
 
 export const listImages = () => {
   const script = `
-var doc = getDocument();
+var out = "[]";
+if (app.documents.length === 0) {
+  out = JSON.stringify([]);
+} else {
+var doc = app.activeDocument;
 var result = [];
 for (var i = 0; i < doc.placedItems.length; i++) {
   var item = doc.placedItems[i];
@@ -45,9 +49,13 @@ for (var i = 0; i < doc.placedItems.length; i++) {
     selected: item.selected,
   });
 }
-JSON.stringify(result);
+out = JSON.stringify(result);
+}
+out;
 `;
-  return executeExtendScript(script);
+  return executeExtendScript(script, {
+    requireIllustratorRunning: true,
+  });
 };
 
 export const changeImages = (changes: ImageChangeInput[]) => {

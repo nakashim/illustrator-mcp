@@ -123,7 +123,17 @@ const ditherSchema = {
   targetUuid: z.string().describe("UUID of a placed image item"),
   pixelSize: z.string().optional().describe("Dither cell size (mm/Q/pt). Default: 2mm"),
   pattern: z
-    .enum(["bayer4", "bayer8", "random"])
+    .enum([
+      "bayer2",
+      "bayer4",
+      "bayer8",
+      "blue-noise",
+      "clustered_4x4",
+      "floyd-steinberg",
+      "atkinson",
+      "riemersma",
+      "random",
+    ])
     .optional()
     .describe("Dither pattern. Default: bayer4"),
   threshold: z

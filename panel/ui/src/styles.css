@@ -1,0 +1,21 @@
+html,
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  margin: 0;
+}
+
+html,
+body,
+#app,
+.tp-custom {
+  height: 100%;
+}
