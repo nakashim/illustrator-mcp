@@ -28,6 +28,113 @@ yarn
 yarn test
 ```
 
+### Local Bridge (Phase 1 MVP)
+
+Run local HTTP bridge for panel integration:
+
+```bash
+yarn bridge
+# or after build:
+yarn bridge:run
+# restart only your own bridge process:
+yarn bridge:restart
+```
+
+Default endpoint: `http://127.0.0.1:43123`
+
+Safe startup behavior:
+
+- `bridge:run`:
+  - if your bridge is already running on the port, it reuses it (does not kill)
+  - if another app uses the port, it exits with an error (does not kill)
+- `bridge:restart`:
+  - only terminates a bridge process that matches this project's bridge command
+  - never force-kills unrelated processes automatically
+
+Available routes:
+
+- `GET /health`
+- `GET /targets/selected`
+- `POST /estimate`
+- `POST /run`
+- `POST /preview`
+- `POST /export/selection`
+- `GET /jobs/:jobId`
+- `POST /jobs/:jobId/cancel`
+
+### CEP Panel Prototype (Phase 2 MVP)
+
+- Files:
+  - `panel/cep/index.html`
+  - `panel/cep/styles.css`
+  - `panel/cep/app.js`
+- Purpose:
+  - effect selector
+  - selected UUID helper button (`Use Selected`)
+  - dynamic parameter form
+  - estimate/risk info box
+  - apply-safe-params button (from `/estimate.safeParams`)
+  - recent run history (latest 5)
+  - preset save/load/delete (localStorage)
+  - auto health polling (5s) with run-button disable when disconnected
+  - export shortcut for latest generated group (`/export/selection`)
+  - preview/final run and job polling
+- Note:
+  - UI is now authored in Preact + Vite (`panel/ui`)
+  - CEP panel reads built assets in `panel/cep`
+  - package/install as CEP extension is handled separately
+
+Build/update CEP panel assets after UI changes:
+
+```bash
+yarn panel:build
+```
+
+UI-only development (no Illustrator restart needed):
+
+```bash
+yarn panel:dev
+```
+
+Component development with Storybook:
+
+```bash
+yarn storybook
+```
+
+### CEP Load (Illustrator)
+
+This repository now includes a minimal CEP panel manifest:
+
+- `panel/cep/CSXS/manifest.xml`
+- `panel/cep/.debug`
+
+Quick setup on macOS:
+
+```bash
+yarn cep:link
+```
+
+This creates a symlink in:
+
+- `~/Library/Application Support/Adobe/CEP/extensions/com.ncst.illustrator.mcp.panel`
+
+Open from Illustrator menu:
+
+- `Window > Extensions > Illustrator MCP`
+
+If panel does not appear, enable CEP debug mode then restart Illustrator:
+
+```bash
+defaults write com.adobe.CSXS.11 PlayerDebugMode 1
+```
+
+Remove link:
+
+```bash
+yarn cep:unlink
+```
+
 ## Illustrator Update Smoke Test
 
 Run this test set every time Illustrator or macOS is updated.
@@ -133,6 +240,33 @@ Important notes:
   - `gamma` (`0.1` to `5`)
   - `dotScale` (`0` to `3`)
   - `backgroundThreshold` (`0` to `1`, default `0.06`)
+
+## Mosaic Tile Vector
+
+- Tool: `mosaic_tile_vector`
+- Purpose: Convert a linked placed image into vector tile mosaic blocks.
+- Core options:
+  - `tileSize` (default `3mm`)
+  - `gap` (default `0mm`)
+  - `cornerRadius` (default `0mm`)
+  - `maxTiles` (default `20000`)
+  - `backgroundThreshold` (default `0.02`)
+  - `grayscale` (default `false`, uses sampled color when false)
+
+## Dither Vector (Phase 1)
+
+- Tool: `dither_vector`
+- Purpose: Convert a linked placed image into monochrome dither tiles.
+- Core options:
+  - `pixelSize` (default `2mm`)
+  - `pattern` (`bayer2`, `bayer4`, `bayer8`, `blue-noise`, `clustered_4x4`, `floyd-steinberg`, `atkinson`, `riemersma`, or `random`, default `bayer4`)
+  - `threshold` (`0..1`, default `0.5`)
+  - `invert` (default `false`)
+  - `maxTiles` (default `40000`)
+  - `backgroundThreshold` (default `0.02`)
+  - `colorMode` (`mono` or `rgb`, default `mono`)
+  - `gamma` (default `1`)
+  - `blackPoint` / `whitePoint` (default `0` / `1`)
 
 ## Halftone Suggestions
 

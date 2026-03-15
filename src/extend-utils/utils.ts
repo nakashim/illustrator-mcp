@@ -11,6 +11,7 @@ const DEFAULT_RETRY_COUNT = 1;
 type ExecuteExtendScriptOptions = {
   timeoutMs?: number;
   retries?: number;
+  requireIllustratorRunning?: boolean;
 };
 
 export type ExecutionErrorKind =
@@ -19,6 +20,7 @@ export type ExecutionErrorKind =
   | "no_such_object"
   | "permission_denied"
   | "script_syntax_error"
+  | "not_running"
   | "unknown";
 
 type ExecutionErrorInfo = {
@@ -67,6 +69,9 @@ export const classifyExecutionError = (error: unknown): ExecutionErrorInfo => {
   if (message.includes("Expected end of line but found identifier")) {
     return { kind: "script_syntax_error", message };
   }
+  if (message.includes("Adobe Illustrator is not running")) {
+    return { kind: "not_running", message };
+  }
   return { kind: "unknown", message };
 };
 
@@ -82,6 +87,10 @@ export const executeExtendScript = (
   script: string,
   options?: ExecuteExtendScriptOptions
 ) => {
+  if (options?.requireIllustratorRunning && !isIllustratorRunning()) {
+    throw new Error("Adobe Illustrator is not running.");
+  }
+
   // 一時フォルダ生成
   const dir =
     process.env.ILLUSTRATOR_MCP_TMP_DIR ?? `${os.homedir()}/illustrator-mcp-tmp`;
@@ -109,11 +118,9 @@ ${script}`;
   fs.writeFileSync(extendScriptPath, combinedScript);
 
   // AppleScript 生成
-  const appleScriptPathLiteral = extendScriptPath
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"');
-  const appleScript = `tell application "Adobe Illustrator"
-    set resultText to do javascript of file "${appleScriptPathLiteral}"
+  const appleScript = `set scriptFile to POSIX file ${JSON.stringify(extendScriptPath)}
+tell application "Adobe Illustrator"
+    set resultText to do javascript of scriptFile
 end tell
 return resultText`;
   const appleScriptPath = path.join(dir, `message-${requestId}.scpt`);
@@ -149,10 +156,27 @@ const createRequestId = () =>
   `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 
 const cleanupTempFile = (filePath: string) => {
+  if (process.env.ILLUSTRATOR_MCP_KEEP_TMP === "1") {
+    return;
+  }
   if (!fs.existsSync(filePath)) {
     return;
   }
   fs.unlinkSync(filePath);
+};
+
+const isIllustratorRunning = () => {
+  try {
+    const output = execFileSync("osascript", ["-e", 'application "Adobe Illustrator" is running'], {
+      timeout: 5_000,
+    })
+      .toString()
+      .trim()
+      .toLowerCase();
+    return output === "true";
+  } catch {
+    return false;
+  }
 };
 
 const toPtDefinition = `

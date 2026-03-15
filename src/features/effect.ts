@@ -3,8 +3,15 @@ import z from "zod";
 import { server } from "../server";
 import { generateHalftoneDots, parseLengthToPt, suggestHalftoneParams } from "../core/halftone";
 import type { HalftoneOptions, HalftoneProfile } from "../core/halftone";
-import { drawHalftoneDots, getPlacedImageInfo } from "../adapters/illustrator";
-import { createCellAverageSampler, readImageBitmap, readImageSize } from "../adapters/image";
+import { generateDitherTiles } from "../core/dither";
+import { generateMosaicTiles } from "../core/mosaic";
+import { drawHalftoneDots, drawMosaicTiles, getPlacedImageInfo } from "../adapters/illustrator";
+import {
+  createCellAverageRgbaSampler,
+  createCellAverageSampler,
+  readImageBitmap,
+  readImageSize,
+} from "../adapters/image";
 
 type HalftoneSuggestionInput = {
   targetUuid: string;
@@ -87,6 +94,84 @@ const halftoneSchema = {
     .length(4)
     .optional()
     .describe("Dot color as CMYK percentages"),
+  groupName: z.string().optional().describe("Output group name"),
+};
+
+const mosaicSchema = {
+  targetUuid: z.string().describe("UUID of a placed image item"),
+  tileSize: z.string().optional().describe("Tile size (mm/Q/pt). Default: 3mm"),
+  gap: z.string().optional().describe("Gap between tiles (mm/Q/pt). Default: 0mm"),
+  cornerRadius: z.string().optional().describe("Tile corner radius (mm/Q/pt). Default: 0mm"),
+  maxTiles: z.number().int().min(100).max(100000).optional(),
+  backgroundThreshold: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Skip transparent regions below alpha threshold. Default: 0.02"),
+  grayscale: z.boolean().optional().describe("Use grayscale tiles instead of sampled color"),
+  strokeCmyk: z
+    .array(z.number())
+    .length(4)
+    .optional()
+    .describe("Optional tile stroke color as CMYK percentages"),
+  strokeWidth: z.string().optional().describe("Optional tile stroke width (mm/Q/pt)"),
+  groupName: z.string().optional().describe("Output group name"),
+};
+
+const ditherSchema = {
+  targetUuid: z.string().describe("UUID of a placed image item"),
+  pixelSize: z.string().optional().describe("Dither cell size (mm/Q/pt). Default: 2mm"),
+  pattern: z
+    .enum([
+      "bayer2",
+      "bayer4",
+      "bayer8",
+      "blue-noise",
+      "clustered_4x4",
+      "floyd-steinberg",
+      "atkinson",
+      "riemersma",
+      "random",
+    ])
+    .optional()
+    .describe("Dither pattern. Default: bayer4"),
+  threshold: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Luminance threshold (0..1). Default: 0.5"),
+  invert: z.boolean().optional().describe("Invert black/white decision"),
+  maxTiles: z.number().int().min(100).max(100000).optional(),
+  backgroundThreshold: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Skip transparent regions below alpha threshold. Default: 0.02"),
+  colorMode: z
+    .enum(["mono", "rgb"])
+    .optional()
+    .describe("Output color mode. mono=black tiles, rgb=channel dither tiles"),
+  gamma: z
+    .number()
+    .min(0.1)
+    .max(5)
+    .optional()
+    .describe("Gamma correction before dithering. Default: 1"),
+  blackPoint: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Input black point remap (0..1). Default: 0"),
+  whitePoint: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Input white point remap (0..1). Default: 1"),
   groupName: z.string().optional().describe("Output group name"),
 };
 
@@ -214,6 +299,118 @@ server.tool(
         {
           type: "text",
           text: `Halftone vector created.\n\n${drawResult}`,
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
+  "mosaic_tile_vector",
+  "Create vector mosaic tiles from a placed image item.",
+  mosaicSchema,
+  async ({
+    targetUuid,
+    tileSize,
+    gap,
+    cornerRadius,
+    maxTiles,
+    backgroundThreshold,
+    grayscale,
+    strokeCmyk,
+    strokeWidth,
+    groupName,
+  }) => {
+    const item = getPlacedImageInfo(targetUuid);
+    if (!item.filePath) {
+      throw new Error(
+        "Target item has no linked file path. Use a linked placed image for mosaic."
+      );
+    }
+
+    const image = await readImageBitmap(item.filePath);
+    const sampler = createCellAverageRgbaSampler(image, 3);
+    const tiles = generateMosaicTiles(
+      item.bounds,
+      {
+        tileSizePt: parseLengthToPt(tileSize ?? "3mm"),
+        gapPt: parseLengthToPt(gap ?? "0mm"),
+        cornerRadiusPt: parseLengthToPt(cornerRadius ?? "0mm"),
+        maxTiles: maxTiles ?? 20000,
+        backgroundThreshold: backgroundThreshold ?? 0.02,
+        grayscale: grayscale ?? false,
+      },
+      sampler
+    );
+
+    const drawResult = drawMosaicTiles(
+      tiles,
+      groupName ?? "MosaicTileVector",
+      strokeCmyk as [number, number, number, number] | undefined,
+      strokeWidth ? parseLengthToPt(strokeWidth) : undefined
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Mosaic tile vector created.\n\n${drawResult}`,
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
+  "dither_vector",
+  "Create vector dithering tiles from a placed image item.",
+  ditherSchema,
+  async ({
+    targetUuid,
+    pixelSize,
+    pattern,
+    threshold,
+    invert,
+    maxTiles,
+    backgroundThreshold,
+    colorMode,
+    gamma,
+    blackPoint,
+    whitePoint,
+    groupName,
+  }) => {
+    const item = getPlacedImageInfo(targetUuid);
+    if (!item.filePath) {
+      throw new Error(
+        "Target item has no linked file path. Use a linked placed image for dithering."
+      );
+    }
+
+    const image = await readImageBitmap(item.filePath);
+    const sampler = createCellAverageRgbaSampler(image, 3);
+    const tiles = generateDitherTiles(
+      item.bounds,
+      {
+        pixelSizePt: parseLengthToPt(pixelSize ?? "2mm"),
+        maxTiles: maxTiles ?? 40000,
+        threshold: threshold ?? 0.5,
+        invert: invert ?? false,
+        pattern: pattern ?? "bayer4",
+        backgroundThreshold: backgroundThreshold ?? 0.02,
+        colorMode: colorMode ?? "mono",
+        gamma: gamma ?? 1,
+        blackPoint: blackPoint ?? 0,
+        whitePoint: whitePoint ?? 1,
+      },
+      sampler
+    );
+
+    const drawResult = drawMosaicTiles(tiles, groupName ?? "DitherVector");
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Dither vector created.\n\n${drawResult}`,
         },
       ],
     };

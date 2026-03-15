@@ -1,19 +1,32 @@
 {
   "scripts": {
     "run": "tsx index.js",
+    "bridge": "tsx src/bridge/index.ts",
+    "bridge:run": "node scripts/bridge-control.mjs run",
+    "bridge:restart": "node scripts/bridge-control.mjs restart",
+    "panel:dev": "vite --config panel/ui/vite.config.mjs",
+    "panel:build": "vite build --config panel/ui/vite.config.mjs",
+    "cep:link": "node scripts/link-cep-panel.mjs",
+    "cep:unlink": "node scripts/link-cep-panel.mjs --unlink",
     "build": "tsc && chmod 755 build/index.js",
     "test": "vitest run .",
     "test:smoke": "node scripts/smoke-e2e.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2",
+    "@nakashim/tp-custom": "^0.1.19",
+    "@tweakpane/core": "^2.0.5",
     "jimp": "^1.6.0",
+    "preact": "^10.28.4",
+    "tweakpane": "^4.0.5",
     "zod": "^3.24.3"
   },
   "devDependencies": {
+    "@preact/preset-vite": "^2.10.3",
     "@types/node": "^22.15.3",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
+    "vite": "^7.3.1",
     "vitest": "^3.1.2"
   }
 }

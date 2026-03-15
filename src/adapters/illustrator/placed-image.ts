@@ -14,7 +14,28 @@ export type PlacedImageInfo = {
 };
 
 const buildPlacedImageInfoScript = (uuid: string) => `
-var item = getPageItem(${toExtendScriptStringLiteral(uuid)});
+var targetUuid = ${toExtendScriptStringLiteral(uuid)};
+var doc = getDocument();
+var item = null;
+
+// Fast path: target UUIDs originate from placedItems, so avoid scanning all pageItems.
+for (var i = 0; i < doc.placedItems.length; i++) {
+  if (doc.placedItems[i].note === targetUuid) {
+    item = doc.placedItems[i];
+    break;
+  }
+}
+
+// Fallback: keep compatibility with manually entered UUIDs from non-placed page items.
+if (!item) {
+  for (var j = 0; j < doc.pageItems.length; j++) {
+    if (doc.pageItems[j].note === targetUuid) {
+      item = doc.pageItems[j];
+      break;
+    }
+  }
+}
+
 if (!item) {
   throw new Error("Target item not found");
 }

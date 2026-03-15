@@ -1,1 +1,6 @@
-export { readImageBitmap, readImageSize, createCellAverageSampler } from "./jimp";
+export {
+  readImageBitmap,
+  readImageSize,
+  createCellAverageSampler,
+  createCellAverageRgbaSampler,
+} from "./jimp";

@@ -1,0 +1,114 @@
+{
+  "presets": {
+    "halftone::test": {
+      "params": {
+        "dotSpacing": "5.8mm",
+        "minDotSize": "4.8mm",
+        "maxDotSize": "23mm",
+        "angleDeg": 28,
+        "maxDots": 39965
+      },
+      "groupName": "halftone_20260315_210251",
+      "savedAt": "2026-03-15T12:33:07.807Z"
+    },
+    "dither::preset_dither_20260315_190208": {
+      "params": {
+        "dotSpacing": "15.1px",
+        "minDotSize": "5.3px",
+        "maxDotSize": "15.9px",
+        "angleDeg": 82,
+        "maxDots": 67323,
+        "pixelSize": "8.9px",
+        "threshold": 0.28,
+        "maxTiles": 64978,
+        "pattern": "floyd-steinberg",
+        "colorMode": "rgb",
+        "invert": false
+      },
+      "groupName": "dither_20260315_190208",
+      "savedAt": "2026-03-15T10:02:10.363Z"
+    },
+    "halftone::preset_halftone_20260315_190204": {
+      "params": {
+        "dotSpacing": "15.1px",
+        "minDotSize": "5.3px",
+        "maxDotSize": "15.9px",
+        "angleDeg": 82,
+        "maxDots": 67323
+      },
+      "groupName": "halftone_20260315_190204",
+      "savedAt": "2026-03-15T10:02:05.848Z"
+    },
+    "dither::preset_dither_20260315_190159": {
+      "params": {
+        "dotSpacing": "15.1px",
+        "minDotSize": "5.3px",
+        "maxDotSize": "15.9px",
+        "angleDeg": 82,
+        "maxDots": 67323,
+        "pixelSize": "8.9px",
+        "threshold": 0.28,
+        "maxTiles": 64978,
+        "pattern": "floyd-steinberg",
+        "colorMode": "rgb",
+        "invert": false
+      },
+      "groupName": "dither_20260315_190159",
+      "savedAt": "2026-03-15T10:02:02.064Z"
+    },
+    "mosaic::preset_mosaic_20260315_190155": {
+      "params": {
+        "tileSize": "18.6px",
+        "maxTiles": 79829,
+        "cornerRadius": "7.4px",
+        "gap": "7.2px",
+        "grayscale": true
+      },
+      "groupName": "mosaic_20260315_190155",
+      "savedAt": "2026-03-15T10:01:57.113Z"
+    },
+    "halftone::preset_halftone_20260315_190150": {
+      "params": {
+        "dotSpacing": "15.1px",
+        "minDotSize": "5.3px",
+        "maxDotSize": "15.9px",
+        "angleDeg": 82,
+        "maxDots": 67323
+      },
+      "groupName": "halftone_20260315_190150",
+      "savedAt": "2026-03-15T10:01:52.957Z"
+    },
+    "dither::preset_dither_20260315_185413": {
+      "params": {
+        "dotSpacing": "15.1px",
+        "minDotSize": "5.3px",
+        "maxDotSize": "15.9px",
+        "angleDeg": 82,
+        "maxDots": 67323,
+        "pixelSize": "8.9px",
+        "threshold": 0.28,
+        "maxTiles": 64978,
+        "pattern": "floyd-steinberg",
+        "colorMode": "rgb",
+        "invert": false
+      },
+      "groupName": "dither_20260315_184729",
+      "savedAt": "2026-03-15T10:01:43.963Z"
+    }
+  },
+  "order": {
+    "dither": [
+      "preset_dither_20260315_190159",
+      "preset_dither_20260315_190208",
+      "preset_dither_20260315_185413"
+    ],
+    "mosaic": [
+      "preset_mosaic_20260315_190155"
+    ],
+    "halftone": [
+      "preset_halftone_20260315_190204",
+      "preset_halftone_20260315_190150",
+      "test"
+    ]
+  }
+}
